@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   FileText,
-  Loader2,
   Mic,
   MicOff,
   Paperclip,
@@ -256,10 +255,14 @@ function Tutor() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const reply = await askAIStream([...msgs, aiMessage].slice(-12), (delta) => {
-        setStreaming(true);
-        appendAssistantDelta(delta);
-      }, { signal: controller.signal });
+      const reply = await askAIStream(
+        [...msgs, aiMessage].slice(-12),
+        (delta) => {
+          setStreaming(true);
+          appendAssistantDelta(delta);
+        },
+        { signal: controller.signal },
+      );
       setStreaming(false);
       if (reply) award(5);
       speak(reply);
