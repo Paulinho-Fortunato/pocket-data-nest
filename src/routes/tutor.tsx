@@ -471,7 +471,7 @@ Explicação:\n${lastMsg.content}`;
                 key={p}
                 type="button"
                 onClick={() => setInput(p)}
-                className="shrink-0 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground border border-border bg-secondary/30"
+                className="shrink-0 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
               >
                 {p.replace(/[: ]+$/, "").replace(/ sobre$| para explicar$/, "")}
               </button>
@@ -500,15 +500,37 @@ Explicação:\n${lastMsg.content}`;
                   hidden
                   onChange={(e) => readFile(e.target.files?.[0])}
                 />
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="icon"
+                  className="file-upload-button"
                   onClick={() => fileRef.current?.click()}
                   aria-label="Anexar ficheiro ou PDF"
                 >
-                  <Paperclip />
-                </Button>
+                  <svg
+                    aria-hidden="true"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeWidth="2"
+                      stroke="#ffffff"
+                      d="M13.5 3H12H8C6.34315 3 5 4.34315 5 6V18C5 19.6569 6.34315 21 8 21H11M13.5 3L19 8.625M13.5 3V7.625C13.5 8.17728 13.9477 8.625 14.5 8.625H19M19 8.625V11.8125"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      strokeWidth="2"
+                      stroke="#ffffff"
+                      d="M17 15V18M17 21V18M17 18H14M17 18H20"
+                    />
+                  </svg>
+                  <span>ADD FILE</span>
+                </button>
                 <Button
                   type="button"
                   variant={listening ? "default" : "outline"}
@@ -593,3 +615,4 @@ Explicação:\n${lastMsg.content}`;
   );
 }
 
+export default Tutor;
