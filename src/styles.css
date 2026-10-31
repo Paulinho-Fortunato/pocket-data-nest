@@ -158,3 +158,142 @@
 @utility backface-hidden {
   backface-visibility: hidden;
 }
+
+@layer components {
+  .message-content {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .message-content > :first-child {
+    margin-top: 0;
+  }
+
+  .message-content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .message-content p,
+  .message-content ul,
+  .message-content ol,
+  .message-content blockquote,
+  .message-content pre,
+  .message-content table {
+    margin-block: 0.65rem;
+  }
+
+  .message-content ul,
+  .message-content ol {
+    padding-left: 1.25rem;
+  }
+
+  .message-content ul {
+    list-style: disc;
+  }
+
+  .message-content ol {
+    list-style: decimal;
+  }
+
+  .message-content li + li {
+    margin-top: 0.3rem;
+  }
+
+  .message-content h1,
+  .message-content h2,
+  .message-content h3 {
+    margin-block: 0.9rem 0.45rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .message-content h1 {
+    font-size: 1.25rem;
+  }
+
+  .message-content h2 {
+    font-size: 1.1rem;
+  }
+
+  .message-content h3 {
+    font-size: 1rem;
+  }
+
+  .message-content strong {
+    color: var(--color-foreground);
+    font-weight: 700;
+  }
+
+  .message-content blockquote {
+    border-left: 3px solid var(--color-primary);
+    color: var(--color-muted-foreground);
+    padding-left: 0.85rem;
+  }
+
+  .message-inline-code {
+    border: 1px solid var(--color-border);
+    border-radius: 0.35rem;
+    background: oklch(0.14 0.03 252 / 0.8);
+    padding: 0.12rem 0.35rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88em;
+  }
+
+  .message-code-block {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    background: oklch(0.13 0.028 252 / 0.9);
+    padding: 0.8rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre;
+  }
+
+  .message-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .message-content table {
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+  }
+
+  .message-content th,
+  .message-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.45rem 0.6rem;
+    text-align: left;
+  }
+
+  .message-content th {
+    background: var(--color-muted);
+    font-weight: 700;
+  }
+
+  .message-content .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.35rem 0;
+  }
+
+  .message-content .katex {
+    font-size: 1.04em;
+  }
+}
+
+@media (max-width: 640px) {
+  .message-content {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .message-content .katex {
+    font-size: 0.95em;
+  }
+}

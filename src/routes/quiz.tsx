@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Trophy } from "lucide-react";
+import { Loader2, Sparkles, Trophy } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader, pageHead } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { askAI } from "@/lib/ai";
 import { defaultCards, usePersistent, useStats, type Card } from "@/lib/store";
 
 export const Route = createFileRoute("/quiz")({
@@ -13,7 +16,6 @@ export const Route = createFileRoute("/quiz")({
 type Q = { q: string; answer: string; options: string[] };
 const shuffle = <T,>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
 
-/** Builds multiple-choice questions from the user's flashcards, prioritising unknown cards. */
 function buildQuiz(cards: Card[]): Q[] {
   const pool = [
     ...shuffle(cards.filter((c) => !c.known)),
@@ -31,6 +33,38 @@ function buildQuiz(cards: Card[]): Q[] {
   }));
 }
 
+function parseAIQuiz(raw: string): Q[] {
+  const json = raw.match(/\[[\s\S]*\]/)?.[0];
+  if (!json) throw new Error("FORMATO_INVALIDO");
+  const value: unknown = JSON.parse(json);
+  if (!Array.isArray(value)) throw new Error("FORMATO_INVALIDO");
+  const questions = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const question = item as {
+        question?: unknown;
+        q?: unknown;
+        answer?: unknown;
+        options?: unknown;
+      };
+      const q = typeof question.question === "string" ? question.question : question.q;
+      const answer = typeof question.answer === "string" ? question.answer : "";
+      const options = Array.isArray(question.options)
+        ? question.options.filter((option): option is string => typeof option === "string")
+        : [];
+      if (typeof q !== "string" || !q.trim() || !answer.trim() || options.length < 2) return null;
+      return {
+        q: q.trim(),
+        answer: answer.trim(),
+        options: shuffle(Array.from(new Set([answer.trim(), ...options]))),
+      };
+    })
+    .filter((question): question is Q => question !== null)
+    .slice(0, 10);
+  if (questions.length < 2) throw new Error("FORMATO_INVALIDO");
+  return questions;
+}
+
 function Quiz() {
   const [cards] = usePersistent<Card[]>("cards", defaultCards);
   const { award } = useStats();
@@ -38,19 +72,49 @@ function Quiz() {
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [score, setScore] = useState(0);
+  const [topic, setTopic] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
 
   const start = () => {
-    setQs(buildQuiz(cards));
+    const localQuiz = buildQuiz(cards);
+    if (localQuiz.length < 1) return;
+    setQs(localQuiz);
     setI(0);
     setPicked(null);
     setScore(0);
   };
 
-  function pick(o: string) {
+  async function createWithAI() {
+    if (!topic.trim() || aiBusy) return;
+    setAiBusy(true);
+    try {
+      const raw = await askAI([
+        {
+          role: "user",
+          content: `Cria um quiz de 5 perguntas de escolha múltipla sobre: ${topic.trim()}. Responde APENAS com JSON válido, sem Markdown, no formato [{"question":"...","options":["...","...","...","..."],"answer":"..."}]. A resposta correta deve existir em options. Usa português europeu e mistura dificuldade.`,
+        },
+      ]);
+      setQs(parseAIQuiz(raw));
+      setI(0);
+      setPicked(null);
+      setScore(0);
+      toast.success("Quiz criado com IA.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message === "NO_KEY"
+          ? "Adiciona a chave OpenRouter nas Definições."
+          : "Não foi possível criar o quiz. Tenta reformular o tema.",
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function pick(option: string) {
     if (picked || !qs) return;
-    setPicked(o);
-    const ok = o === qs[i]?.answer;
-    if (ok) setScore((s) => s + 1);
+    setPicked(option);
+    const ok = option === qs[i]?.answer;
+    if (ok) setScore((value) => value + 1);
     award(ok ? 10 : 0, (s) => ({ answered: s.answered + 1, correct: s.correct + (ok ? 1 : 0) }));
   }
 
@@ -69,23 +133,54 @@ function Quiz() {
     <div>
       <PageHeader
         title="Quiz adaptativo"
-        subtitle="Perguntas criadas a partir dos teus flashcards, com foco no que ainda não dominas."
+        subtitle="Pratica com os teus cartões ou deixa a IA criar um quiz sobre qualquer tema."
       />
-      {cards.length < 2 ? (
-        <div className="panel p-10 text-center text-muted-foreground">
-          Precisas de pelo menos 2 flashcards.{" "}
-          <Link to="/flashcards" className="text-primary underline">
-            Criar cartões
-          </Link>
-        </div>
-      ) : !qs ? (
-        <div className="panel p-10 text-center">
-          <p className="mb-5 text-muted-foreground">
-            5 perguntas · +10 XP por acerto · +15 XP ao terminar
-          </p>
-          <Button size="lg" onClick={start}>
-            Começar
-          </Button>
+      {!qs ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="panel p-6">
+            <div className="mb-4 flex items-center gap-2 text-primary">
+              <Sparkles className="size-5" />
+              <h2 className="font-semibold text-foreground">Quiz com IA</h2>
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Escreve um tema, disciplina ou capítulo. A IA cria perguntas e respostas múltiplas.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                placeholder="Ex.: fotossíntese, funções quadráticas..."
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") createWithAI();
+                }}
+              />
+              <Button
+                onClick={createWithAI}
+                disabled={aiBusy || !topic.trim()}
+                className="shrink-0"
+              >
+                {aiBusy ? <Loader2 className="animate-spin" /> : <Sparkles />}{" "}
+                {aiBusy ? "A criar..." : "Criar quiz"}
+              </Button>
+            </div>
+          </div>
+          <div className="panel p-6">
+            <h2 className="mb-2 font-semibold">Quiz dos teus cartões</h2>
+            <p className="mb-5 text-sm text-muted-foreground">
+              5 perguntas · +10 XP por acerto · +15 XP ao terminar
+            </p>
+            <Button size="lg" onClick={start} disabled={cards.length < 2}>
+              Começar quiz local
+            </Button>
+            {cards.length < 2 && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Precisas de pelo menos 2 flashcards.{" "}
+                <Link to="/flashcards" className="text-primary underline">
+                  Criar cartões
+                </Link>
+              </p>
+            )}
+          </div>
         </div>
       ) : i >= qs.length ? (
         <div className="panel p-10 text-center">
@@ -96,7 +191,13 @@ function Quiz() {
           <p className="mt-1 text-muted-foreground">
             {score === qs.length ? "Perfeito!" : "Revê os cartões em que falhaste."}
           </p>
-          <Button className="mt-6" onClick={start}>
+          <Button
+            className="mt-6"
+            onClick={() => {
+              setQs(null);
+              setTopic("");
+            }}
+          >
             Novo quiz
           </Button>
         </div>
@@ -104,7 +205,7 @@ function Quiz() {
         (() => {
           const cur = qs[i]!;
           return (
-            <div className="panel p-6">
+            <div className="panel p-4 sm:p-6">
               <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full bg-brand transition-all"
@@ -116,21 +217,22 @@ function Quiz() {
               </p>
               <h2 className="mt-2 text-xl font-semibold">{cur.q}</h2>
               <div className="mt-5 grid gap-2">
-                {cur.options.map((o, k) => {
+                {cur.options.map((option, index) => {
                   const state = !picked
                     ? ""
-                    : o === cur.answer
+                    : option === cur.answer
                       ? "border-success bg-success/15"
-                      : o === picked
+                      : option === picked
                         ? "border-destructive bg-destructive/15"
                         : "opacity-60";
                   return (
                     <button
-                      key={k}
-                      onClick={() => pick(o)}
+                      key={`${option}-${index}`}
+                      type="button"
+                      onClick={() => pick(option)}
                       className={`rounded-xl border border-border p-3 text-left text-sm transition hover:border-primary/50 ${state}`}
                     >
-                      {o}
+                      {option}
                     </button>
                   );
                 })}
