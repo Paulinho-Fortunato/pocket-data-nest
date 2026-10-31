@@ -10,33 +10,141 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DefinicoesRouteImport } from './routes/definicoes'
+import { Route as FlashcardsRouteImport } from './routes/flashcards'
+import { Route as FocoRouteImport } from './routes/foco'
+import { Route as MetodosRouteImport } from './routes/metodos'
+import { Route as NotasRouteImport } from './routes/notas'
+import { Route as ProgressoRouteImport } from './routes/progresso'
+import { Route as QuizRouteImport } from './routes/quiz'
+import { Route as TutorRouteImport } from './routes/tutor'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DefinicoesRoute = DefinicoesRouteImport.update({
+  id: '/definicoes',
+  path: '/definicoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FlashcardsRoute = FlashcardsRouteImport.update({
+  id: '/flashcards',
+  path: '/flashcards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FocoRoute = FocoRouteImport.update({
+  id: '/foco',
+  path: '/foco',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetodosRoute = MetodosRouteImport.update({
+  id: '/metodos',
+  path: '/metodos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotasRoute = NotasRouteImport.update({
+  id: '/notas',
+  path: '/notas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressoRoute = ProgressoRouteImport.update({
+  id: '/progresso',
+  path: '/progresso',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuizRoute = QuizRouteImport.update({
+  id: '/quiz',
+  path: '/quiz',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TutorRoute = TutorRouteImport.update({
+  id: '/tutor',
+  path: '/tutor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/definicoes': typeof DefinicoesRoute
+  '/flashcards': typeof FlashcardsRoute
+  '/foco': typeof FocoRoute
+  '/metodos': typeof MetodosRoute
+  '/notas': typeof NotasRoute
+  '/progresso': typeof ProgressoRoute
+  '/quiz': typeof QuizRoute
+  '/tutor': typeof TutorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/definicoes': typeof DefinicoesRoute
+  '/flashcards': typeof FlashcardsRoute
+  '/foco': typeof FocoRoute
+  '/metodos': typeof MetodosRoute
+  '/notas': typeof NotasRoute
+  '/progresso': typeof ProgressoRoute
+  '/quiz': typeof QuizRoute
+  '/tutor': typeof TutorRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/definicoes': typeof DefinicoesRoute
+  '/flashcards': typeof FlashcardsRoute
+  '/foco': typeof FocoRoute
+  '/metodos': typeof MetodosRoute
+  '/notas': typeof NotasRoute
+  '/progresso': typeof ProgressoRoute
+  '/quiz': typeof QuizRoute
+  '/tutor': typeof TutorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/definicoes'
+    | '/flashcards'
+    | '/foco'
+    | '/metodos'
+    | '/notas'
+    | '/progresso'
+    | '/quiz'
+    | '/tutor'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/definicoes'
+    | '/flashcards'
+    | '/foco'
+    | '/metodos'
+    | '/notas'
+    | '/progresso'
+    | '/quiz'
+    | '/tutor'
+  id:
+    | '__root__'
+    | '/'
+    | '/definicoes'
+    | '/flashcards'
+    | '/foco'
+    | '/metodos'
+    | '/notas'
+    | '/progresso'
+    | '/quiz'
+    | '/tutor'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DefinicoesRoute: typeof DefinicoesRoute
+  FlashcardsRoute: typeof FlashcardsRoute
+  FocoRoute: typeof FocoRoute
+  MetodosRoute: typeof MetodosRoute
+  NotasRoute: typeof NotasRoute
+  ProgressoRoute: typeof ProgressoRoute
+  QuizRoute: typeof QuizRoute
+  TutorRoute: typeof TutorRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +156,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/definicoes': {
+      id: '/definicoes'
+      path: '/definicoes'
+      fullPath: '/definicoes'
+      preLoaderRoute: typeof DefinicoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/flashcards': {
+      id: '/flashcards'
+      path: '/flashcards'
+      fullPath: '/flashcards'
+      preLoaderRoute: typeof FlashcardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/foco': {
+      id: '/foco'
+      path: '/foco'
+      fullPath: '/foco'
+      preLoaderRoute: typeof FocoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metodos': {
+      id: '/metodos'
+      path: '/metodos'
+      fullPath: '/metodos'
+      preLoaderRoute: typeof MetodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notas': {
+      id: '/notas'
+      path: '/notas'
+      fullPath: '/notas'
+      preLoaderRoute: typeof NotasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progresso': {
+      id: '/progresso'
+      path: '/progresso'
+      fullPath: '/progresso'
+      preLoaderRoute: typeof ProgressoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quiz': {
+      id: '/quiz'
+      path: '/quiz'
+      fullPath: '/quiz'
+      preLoaderRoute: typeof QuizRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tutor': {
+      id: '/tutor'
+      path: '/tutor'
+      fullPath: '/tutor'
+      preLoaderRoute: typeof TutorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DefinicoesRoute: DefinicoesRoute,
+  FlashcardsRoute: FlashcardsRoute,
+  FocoRoute: FocoRoute,
+  MetodosRoute: MetodosRoute,
+  NotasRoute: NotasRoute,
+  ProgressoRoute: ProgressoRoute,
+  QuizRoute: QuizRoute,
+  TutorRoute: TutorRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
