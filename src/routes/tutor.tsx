@@ -8,17 +8,27 @@ import {
   Paperclip,
   Send,
   Sparkles,
+  Square,
   Trash2,
   Volume2,
   VolumeX,
   X,
+  Youtube,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MessageContent } from "@/components/MessageContent";
 import { PageHeader, pageHead } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { askAI } from "@/lib/ai";
+import { askAIStream } from "@/lib/ai";
+import {
+  contextBlock,
+  isAllowedFile,
+  MAX_FILE_CHARS,
+  readAttachmentText,
+  parseYouTubeUrl,
+  youtubeThumb,
+} from "@/lib/extract";
 import { usePersistent, useStats, type ChatMsg } from "@/lib/store";
 
 export const Route = createFileRoute("/tutor")({
@@ -35,7 +45,13 @@ const presets = [
   "Cria 5 perguntas de revisão sobre ",
   "Usa o método Feynman para explicar ",
 ];
-const MAX_FILE_CHARS = 18_000;
+
+type Attachment = {
+  name: string;
+  text: string;
+  kind: "file" | "youtube";
+  thumb?: string;
+};
 
 type SpeechResult = Event & {
   results: { length: number; [index: number]: { [index: number]: { transcript: string } } };
@@ -85,19 +101,22 @@ function Tutor() {
   const msgs = validMessages(storedMsgs);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [noKey, setNoKey] = useState(false);
-  const [attachment, setAttachment] = useState<{ name: string; text: string } | null>(null);
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [listening, setListening] = useState(false);
   const { award } = useStats();
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [msgs, loading]);
   useEffect(
     () => () => {
       recognitionRef.current?.stop();
+      abortRef.current?.abort();
       window.speechSynthesis?.cancel();
     },
     [],
@@ -146,18 +165,15 @@ function Tutor() {
 
   async function readFile(file?: File) {
     if (!file) return;
-    const allowed =
-      file.type.startsWith("text/") ||
-      /\.(txt|md|markdown|csv|json|js|ts|tsx|jsx|py|html|css)$/i.test(file.name);
-    if (!allowed) {
-      toast.error("Escolhe um ficheiro de texto, Markdown, código, CSV ou JSON.");
+    if (!isAllowedFile(file)) {
+      toast.error("Escolhe um ficheiro de texto, Markdown, código, CSV, JSON ou PDF.");
       return;
     }
     try {
-      const text = await file.text();
-      setAttachment({ name: file.name, text: text.slice(0, MAX_FILE_CHARS) });
+      const text = await readAttachmentText(file);
+      setAttachment({ name: file.name, text, kind: "file" });
       toast.success(
-        text.length > MAX_FILE_CHARS
+        text.length >= MAX_FILE_CHARS
           ? "Ficheiro anexado (texto limitado a 18 000 caracteres)."
           : "Ficheiro anexado ao próximo pedido.",
       );
@@ -166,19 +182,68 @@ function Tutor() {
     }
   }
 
+  async function loadYouTube(url: string) {
+    const video = parseYouTubeUrl(url);
+    if (!video) {
+      toast.error("Cola uma ligação válida do YouTube.");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/youtube-transcript?v=${video.id}`);
+      const data = (await response.json()) as { text?: string; error?: string };
+      if (!response.ok || !data.text) {
+        toast.error(data.error ?? "Não foi possível obter a transcrição deste vídeo.");
+        return;
+      }
+      setAttachment({
+        name: "Vídeo do YouTube",
+        text: data.text.slice(0, MAX_FILE_CHARS),
+        kind: "youtube",
+        thumb: youtubeThumb(video.id),
+      });
+      toast.success("Transcrição do vídeo anexada ao próximo pedido.");
+    } catch {
+      toast.error("Não foi possível obter a transcrição deste vídeo.");
+    }
+  }
+
+  function appendAssistantDelta(delta: string) {
+    setMsgs((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === "assistant") {
+        next[next.length - 1] = { role: "assistant", content: last.content + delta };
+      } else {
+        next.push({ role: "assistant", content: delta });
+      }
+      return next;
+    });
+  }
+
+  function stopStreaming() {
+    abortRef.current?.abort();
+  }
+
   async function send() {
     const text = input.trim();
+    const youtubeUrl = parseYouTubeUrl(text);
     if ((!text && !attachment) || loading) return;
-    const fileContext = attachment
-      ? `\n\n[Contexto do ficheiro ${attachment.name}]\n${attachment.text}\n[/Contexto do ficheiro]`
-      : "";
+    if (youtubeUrl && !attachment) {
+      await loadYouTube(text);
+      return;
+    }
+    const label =
+      attachment?.kind === "youtube" ? "vídeo do YouTube" : `ficheiro ${attachment?.name ?? ""}`;
+    const fileContext = attachment ? contextBlock(label, attachment.text) : "";
     const displayMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o ficheiro anexado."}${attachment ? `\n\n📎 ${attachment.name}` : ""}`,
+      content: `${text || "Analisa o conteúdo anexado."}${
+        attachment ? `📎 ${attachment.name}${attachment.kind === "youtube" ? " (vídeo)" : ""}` : ""
+      }`,
     };
     const aiMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o ficheiro anexado."}${fileContext}`,
+      content: `${text || "Analisa o conteúdo anexado."}${fileContext}`,
     };
     const next = [...msgs, displayMessage];
     setMsgs(next);
@@ -187,41 +252,49 @@ function Tutor() {
     if (fileRef.current) fileRef.current.value = "";
     setLoading(true);
     setNoKey(false);
+    setStreaming(false);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const reply = await askAI([...msgs, aiMessage].slice(-12));
-      setMsgs([...next, { role: "assistant", content: reply }]);
-      award(5);
+      const reply = await askAIStream([...msgs, aiMessage].slice(-12), (delta) => {
+        setStreaming(true);
+        appendAssistantDelta(delta);
+      }, { signal: controller.signal });
+      setStreaming(false);
+      if (reply) award(5);
       speak(reply);
     } catch (e) {
+      setStreaming(false);
+      if (controller.signal.aborted) {
+        appendAssistantDelta("\n\n*(resposta interrompida)*");
+        return;
+      }
       const isKey = e instanceof Error && e.message === "NO_KEY";
       setNoKey(isKey);
-      setMsgs([
-        ...next,
-        {
-          role: "assistant",
-          content: isKey
-            ? "Para eu responder, adiciona a tua chave OpenRouter nas Definições."
-            : "Não consegui ligar ao tutor agora. Verifica a ligação e a chave.",
-        },
-      ]);
+      appendAssistantDelta(
+        isKey
+          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas Definições."
+          : "\n\nNão consegui ligar ao tutor agora. Verifica a ligação e a chave.",
+      );
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
   }
 
   return (
     <div className="min-w-0">
-      <PageHeader title="Tutor IA" subtitle="Explicações com texto, fórmulas, ficheiros e voz.">
+      <PageHeader title="Tutor IA" subtitle="Explicações com texto, fórmulas, ficheiros, PDF, vídeos e voz.">
         <Button variant="outline" size="sm" onClick={() => setMsgs([welcome])}>
           <Trash2 /> Limpar
         </Button>
       </PageHeader>
-      <div className="panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
+      <div className="panel glass flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5">
           {msgs.map((m, i) => (
             <div
               key={`${i}-${m.role}`}
-              className={`flex items-end gap-2 sm:gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
+              className={`animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-end gap-2 sm:gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
             >
               <span
                 className={`grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold sm:size-9 sm:text-[11px] ${m.role === "user" ? "bg-accent text-accent-foreground" : "bg-brand text-primary-foreground"}`}
@@ -229,19 +302,27 @@ function Tutor() {
                 {m.role === "user" ? "EU" : "IA"}
               </span>
               <div
-                className={`min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${m.role === "user" ? "bg-accent/20" : "bg-secondary"}`}
+                className={`glass min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${m.role === "user" ? "bg-accent/20" : "bg-secondary/60"}`}
               >
                 {m.role === "assistant" ? (
                   <MessageContent content={m.content} />
                 ) : (
                   <p className="whitespace-pre-wrap break-words">{m.content}</p>
                 )}
+                {streaming && i === msgs.length - 1 && m.role === "assistant" && (
+                  <span className="typing-cursor" aria-hidden="true" />
+                )}
               </div>
             </div>
           ))}
-          {loading && (
-            <p className="flex items-center gap-2 pl-10 text-sm text-muted-foreground animate-pulse">
-              <Loader2 className="size-4 animate-spin" /> A organizar uma explicação clara...
+          {loading && !streaming && (
+            <p className="flex items-center gap-2 pl-10 text-sm text-muted-foreground">
+              <span className="flex gap-1">
+                <span className="typing-dot" style={{ animationDelay: "0ms" }} />
+                <span className="typing-dot" style={{ animationDelay: "150ms" }} />
+                <span className="typing-dot" style={{ animationDelay: "300ms" }} />
+              </span>
+              A organizar uma explicação clara...
             </p>
           )}
           {noKey && (
@@ -253,16 +334,24 @@ function Tutor() {
           )}
           <div ref={endRef} />
         </div>
-        <div className="shrink-0 border-t border-border bg-background/50 p-2.5 sm:p-3">
+        <div className="glass shrink-0 border-t border-border/60 p-2.5 sm:p-3">
           {attachment && (
-            <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
-              <FileText className="size-4 shrink-0 text-primary" />
+            <div className="glass-highlight mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
+              {attachment.kind === "youtube" && attachment.thumb ? (
+                <img
+                  src={attachment.thumb}
+                  alt=""
+                  className="h-8 w-14 shrink-0 rounded object-cover"
+                />
+              ) : (
+                <FileText className="size-4 shrink-0 text-primary" />
+              )}
               <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
               <button
                 type="button"
                 onClick={() => setAttachment(null)}
                 className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                aria-label="Remover ficheiro"
+                aria-label="Remover anexo"
               >
                 <X className="size-3.5" />
               </button>
@@ -274,7 +363,7 @@ function Tutor() {
                 key={p}
                 type="button"
                 onClick={() => setInput(p)}
-                className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+                className="glass glass-highlight shrink-0 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
               >
                 {p.replace(/[: ]+$/, "").replace(/ sobre$| para explicar$/, "")}
               </button>
@@ -290,7 +379,7 @@ function Tutor() {
                   send();
                 }
               }}
-              placeholder="Escreve a tua dúvida..."
+              placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
               rows={2}
               className="min-h-12 flex-1 resize-none text-sm sm:min-h-14"
             />
@@ -299,7 +388,7 @@ function Tutor() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".txt,.md,.markdown,.csv,.json,.js,.ts,.tsx,.jsx,.py,.html,.css,text/*"
+                  accept=".txt,.md,.markdown,.csv,.json,.js,.ts,.tsx,.jsx,.py,.html,.css,.pdf,text/*,application/pdf"
                   hidden
                   onChange={(e) => readFile(e.target.files?.[0])}
                 />
@@ -308,7 +397,7 @@ function Tutor() {
                   variant="outline"
                   size="icon"
                   onClick={() => fileRef.current?.click()}
-                  aria-label="Anexar ficheiro"
+                  aria-label="Anexar ficheiro ou PDF"
                 >
                   <Paperclip />
                 </Button>
@@ -331,26 +420,41 @@ function Tutor() {
                   {voiceEnabled ? <Volume2 /> : <VolumeX />}
                 </Button>
               </div>
-              <Button
-                type="button"
-                onClick={send}
-                disabled={loading || (!input.trim() && !attachment)}
-                size="icon"
-                className="h-11 w-full sm:h-12"
-                aria-label="Enviar"
-              >
-                <Send />
-              </Button>
+              {loading ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={stopStreaming}
+                  size="icon"
+                  className="h-11 w-full sm:h-12"
+                  aria-label="Parar resposta"
+                >
+                  <Square />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={send}
+                  disabled={loading || (!input.trim() && !attachment)}
+                  size="icon"
+                  className="h-11 w-full sm:h-12"
+                  aria-label="Enviar"
+                >
+                  <Send />
+                </Button>
+              )}
             </div>
           </div>
           <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
-            Enter envia · Shift + Enter cria uma nova linha · ficheiros até 18 000 caracteres
+            Enter envia · Shift + Enter nova linha · PDF, textos e vídeos do YouTube (colar link) até
+            18 000 caracteres
           </p>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        <Sparkles className="size-3.5 text-primary" />A IA entende Markdown, fórmulas matemáticas e
-        tabelas nas respostas.
+        <Sparkles className="size-3.5 text-primary" />
+        A IA digita em tempo real e entende Markdown, fórmulas matemáticas e tabelas.
+        <Youtube className="size-3.5 text-primary" />
       </div>
     </div>
   );
