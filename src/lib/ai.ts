@@ -30,6 +30,36 @@ export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promis
   return text;
 }
 
+/** Sends a minimal completion to verify the saved key/model actually work. */
+export async function testAIConnection(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const key = readStore<string>("openrouter_key", "");
+  const model = readStore<string>("openrouter_model", "openrouter/free");
+  if (!key) return { ok: false, error: "Falta a chave OpenRouter." };
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": location.origin,
+        "X-Title": "AngoStudy",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ok" }],
+      }),
+    });
+    const data = (await r.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+    if (!r.ok) return { ok: false, error: data?.error?.message || `Erro ${r.status}` };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Não foi possível ligar à OpenRouter." };
+  }
+}
+
 /**
  * Streams the answer from OpenRouter (SSE) so the UI can render text as the
  * model types. Returns the full text once the stream completes.
@@ -82,10 +112,16 @@ export async function askAIStream(
       if (!line.startsWith("data:")) continue;
       const data = line.slice(5).trim();
       if (!data || data === "[DONE]") continue;
-      const chunk = JSON.parse(data) as {
+      // Per-line parse: one malformed SSE payload must not kill the stream.
+      let chunk: {
         choices?: { delta?: { content?: string } }[];
         error?: { message?: string };
       };
+      try {
+        chunk = JSON.parse(data);
+      } catch {
+        continue; // malformed or keep-alive payload — skip it
+      }
       if (chunk.error) throw new Error(chunk.error.message || "Erro no stream");
       const delta = chunk.choices?.[0]?.delta?.content;
       if (delta) {
