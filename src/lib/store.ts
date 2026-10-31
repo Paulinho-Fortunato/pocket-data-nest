@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { idbGet, idbSet } from "./idb";
 
 /** All app data is stored in the browser (localStorage) under this prefix. */
 const PREFIX = "angostudy:";
@@ -52,6 +53,49 @@ export function usePersistent<T>(key: string, fallback: T) {
         typeof next === "function" ? (next as (p: T) => T)(readStore(key, fallback)) : next;
       writeStore(key, resolved);
       setValue(resolved);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key],
+  );
+
+  return [value, update, ready] as const;
+}
+
+/**
+ * Like usePersistent but stores values in IndexedDB — for data that can be
+ * large (chat history, attachment texts). localStorage stays for small state.
+ */
+export function usePersistentDB<T>(key: string, fallback: T) {
+  const [value, setValue] = useState<T>(fallback);
+  const [ready, setReady] = useState(false);
+  const writesRef = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    idbGet<T>(key, fallback).then((stored) => {
+      if (alive) {
+        setValue(stored);
+        setReady(true);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const update = useCallback(
+    (next: T | ((prev: T) => T)) => {
+      setValue((prev) => {
+        const resolved = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
+        // Debounced persistence: avoid an IndexedDB write per streamed chunk.
+        writesRef.current += 1;
+        const ticket = writesRef.current;
+        setTimeout(() => {
+          if (ticket === writesRef.current) void idbSet(key, resolved);
+        }, 400);
+        return resolved;
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key],
