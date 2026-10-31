@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 md:px-6 md:pb-10">
-      <header className="glass sticky top-0 z-20 -mx-4 flex h-16 items-center justify-between border-border/60 px-4 md:-mx-6 md:px-6">
+      <header className="sticky top-0 z-20 -mx-4 flex h-16 items-center justify-between border-b border-border bg-background px-4 md:-mx-6 md:px-6">
         <Link to="/" className="flex items-center gap-3">
           <span className="grid size-9 place-items-center rounded-xl bg-brand text-primary-foreground shadow-glow">
             <GraduationCap className="size-5" />
@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={to}
                 to={to}
                 activeOptions={{ exact: to === "/" }}
-                className="glass-highlight flex items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground data-[status=active]:border-primary/25 data-[status=active]:bg-primary/10 data-[status=active]:text-foreground"
+                className="flex items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground data-[status=active]:border-primary/25 data-[status=active]:bg-primary/10 data-[status=active]:text-foreground"
               >
                 <Icon className="size-4" />
                 {label}
@@ -87,20 +87,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-w-0">{children}</main>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="glass fixed inset-x-0 bottom-0 z-30 flex justify-around py-2 md:hidden">
-        {nav.slice(0, 6).map(({ to, label, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            activeOptions={{ exact: to === "/" }}
-            className="flex flex-col items-center gap-0.5 px-2 text-[10px] text-muted-foreground data-[status=active]:text-primary"
-          >
-            <Icon className="size-5" />
-            {label.split(" ")[0]}
-          </Link>
-        ))}
-      </nav>
+      {/* Mobile pill menu (adapted from Uiverse mymiamo, solid colours) */}
+      <div className="fixed inset-x-0 bottom-2 z-30 flex justify-center px-2 md:hidden">
+        <nav className="menu" aria-label="Navegação principal">
+          {nav.slice(0, 5).map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} activeOptions={{ exact: to === "/" }} aria-label={label}>
+              <Icon />
+              <span>{label.split(" ")[0]}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
