@@ -10,12 +10,12 @@ import { readStore, useStats, writeStore } from "@/lib/store";
 import { testAIConnection } from "@/lib/ai";
 
 export const Route = createFileRoute("/definicoes")({
-  head: () => pageHead("DefiniÃ§Ãµes", "Perfil, tutor IA e cÃ³pia de seguranÃ§a dos teus dados."),
+  head: () => pageHead("Definições", "Perfil, tutor IA e cópia de segurança dos teus dados."),
   component: Definicoes,
 });
 
 const models = [
-  ["openrouter/free", "OpenRouter Free (automÃ¡tico)"],
+  ["openrouter/free", "OpenRouter Free (automático)"],
   ["google/gemma-2-9b-it:free", "Gemma 2 9B (Free)"],
   ["meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (Free)"],
   ["deepseek/deepseek-r1-distill-llama-70b", "DeepSeek R1 70B"],
@@ -44,16 +44,16 @@ function Definicoes() {
     setTestingConnection(true);
     setTestResult(null);
     setTestError("");
-    
+
     // Save temporarily to test
     writeStore("openrouter_key", key.trim());
     writeStore("openrouter_model", model);
-    
+
     const result = await testAIConnection();
-    
+
     if (result.ok) {
       setTestResult("ok");
-      toast.success("LigaÃ§Ã£o bem-sucedida! Podes comeÃ§ar a usar o tutor.");
+      toast.success("Ligação bem-sucedida! Podes começar a usar o tutor.");
     } else {
       setTestResult("error");
       setTestError(result.error);
@@ -66,7 +66,7 @@ function Definicoes() {
     setStats({ ...stats, name: name.trim() || "Estudante", weeklyGoal: Math.max(1, goal) });
     writeStore("openrouter_key", key.trim());
     writeStore("openrouter_model", model);
-    toast.success("DefiniÃ§Ãµes guardadas neste dispositivo.");
+    toast.success("Definições guardadas neste dispositivo.");
   }
 
   function backup() {
@@ -90,12 +90,12 @@ function Definicoes() {
       toast.success("Dados restaurados.");
       setTimeout(() => location.reload(), 600);
     } catch {
-      toast.error("Ficheiro invÃ¡lido.");
+      toast.error("Ficheiro inválido.");
     }
   }
 
   function wipe() {
-    if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta aÃ§Ã£o Ã© irreversÃ­vel.")) return;
+    if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta ação é irreversível.")) return;
     Object.keys(localStorage)
       .filter((k) => k.startsWith("angostudy:"))
       .forEach((k) => localStorage.removeItem(k));
@@ -104,8 +104,8 @@ function Definicoes() {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <PageHeader title="DefiniÃ§Ãµes" subtitle="Tudo fica guardado apenas no teu navegador." />
-      
+      <PageHeader title="Definições" subtitle="Tudo fica guardado apenas no teu navegador." />
+
       <section className="panel space-y-4 p-5">
         <h2 className="font-semibold">Perfil</h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -114,7 +114,7 @@ function Definicoes() {
             <Input id="n" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="g">Meta semanal (sessÃµes)</Label>
+            <Label htmlFor="g">Meta semanal (sessões)</Label>
             <Input
               id="g"
               type="number"
@@ -138,7 +138,7 @@ function Definicoes() {
             onChange={(e) => setKey(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Cria uma chave grÃ¡tis em <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai</a>. Nunca sai deste dispositivo exceto para falar com a IA.
+            Cria uma chave gratuita em <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai</a>. Nunca sai deste dispositivo exceto para o modelo que selecionares.
           </p>
         </div>
 
@@ -161,25 +161,25 @@ function Definicoes() {
           </p>
         </div>
 
-        <Button 
-          onClick={handleTestConnection} 
+        <Button
+          onClick={handleTestConnection}
           disabled={!key.trim() || testingConnection}
           className="w-full"
         >
           {testingConnection ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              A testar ligaÃ§Ã£o...
+              A testar ligação...
             </>
           ) : (
-            "Testar ligaÃ§Ã£o"
+            "Testar ligação"
           )}
         </Button>
 
         {testResult === "ok" && (
           <div className="flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">
             <CheckCircle className="h-4 w-4" />
-            LigaÃ§Ã£o bem-sucedida! EstÃ¡ tudo pronto.
+            Ligação bem-sucedida! Está tudo pronto.
           </div>
         )}
 
@@ -192,17 +192,17 @@ function Definicoes() {
       </section>
 
       <Button onClick={save} size="lg" className="w-full">
-        Guardar definiÃ§Ãµes
+        Guardar definições
       </Button>
 
       <section className="panel space-y-3 p-5">
         <h2 className="font-semibold">Os teus dados</h2>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={backup}>
-            <Download /> Exportar cÃ³pia
+            <Download /> Exportar cópia
           </Button>
           <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            <Upload /> Importar cÃ³pia
+            <Upload /> Importar cópia
           </Button>
           <Button variant="destructive" onClick={wipe}>
             <Trash2 /> Apagar tudo
@@ -219,3 +219,4 @@ function Definicoes() {
     </div>
   );
 }
+

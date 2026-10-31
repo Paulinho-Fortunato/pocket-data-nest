@@ -39,12 +39,12 @@ export const Route = createFileRoute("/tutor")({
 
 const welcome: ChatMsg = {
   role: "assistant",
-  content: "OlÃ¡! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?",
+  content: "Olá! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?",
 };
 const presets = [
   "Explica-me de forma simples: ",
-  "Cria 5 perguntas de revisÃ£o sobre ",
-  "Usa o mÃ©todo Feynman para explicar ",
+  "Cria 5 perguntas de revisão sobre ",
+  "Usa o método Feynman para explicar ",
 ];
 
 type Attachment = {
@@ -89,10 +89,10 @@ function validMessages(value: ChatMsg[]): ChatMsg[] {
 
 function speechText(content: string) {
   return content
-    .replace(/```[\s\S]*?```/g, " bloco de cÃ³digo omitido ")
-    .replace(/https?:\/\/\S+/g, " ligaÃ§Ã£o ")
+    .replace(/```[\s\S]*?```/g, " bloco de código omitido ")
+    .replace(/https?:\/\/\S+/g, " ligação ")
     .replace(/[*_#`>$|~]/g, "")
-    .replace(/\$[^$]+\$/g, " fÃ³rmula ")
+    .replace(/\$[^$]+\$/g, " fórmula ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -144,7 +144,7 @@ function Tutor() {
     }
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
-      toast.error("O reconhecimento de voz nÃ£o estÃ¡ disponÃ­vel neste navegador.");
+      toast.error("O reconhecimento de voz não está disponível neste navegador.");
       return;
     }
     const recognition = new Recognition();
@@ -161,7 +161,7 @@ function Tutor() {
     recognition.onend = () => setListening(false);
     recognition.onerror = () => {
       setListening(false);
-      toast.error("NÃ£o foi possÃ­vel captar a voz. Tenta novamente.");
+      toast.error("Não foi possível captar a voz. Tenta novamente.");
     };
     recognitionRef.current = recognition;
     recognition.start();
@@ -171,7 +171,7 @@ function Tutor() {
   async function readFile(file?: File) {
     if (!file) return;
     if (!isAllowedFile(file)) {
-      toast.error("Escolhe um ficheiro de texto, Markdown, cÃ³digo, CSV, JSON ou PDF.");
+      toast.error("Escolhe um ficheiro de texto, Markdown, código, CSV, JSON ou PDF.");
       return;
     }
     try {
@@ -180,35 +180,35 @@ function Tutor() {
       toast.success(
         text.length >= MAX_FILE_CHARS
           ? "Ficheiro anexado (texto limitado a 18 000 caracteres)."
-          : "Ficheiro anexado ao prÃ³ximo pedido.",
+          : "Ficheiro anexado ao próximo pedido.",
       );
     } catch {
-      toast.error("NÃ£o foi possÃ­vel ler esse ficheiro.");
+      toast.error("Não foi possível ler esse ficheiro.");
     }
   }
 
   async function loadYouTube(url: string) {
     const video = parseYouTubeUrl(url);
     if (!video) {
-      toast.error("Cola uma ligaÃ§Ã£o vÃ¡lida do YouTube.");
+      toast.error("Cola uma ligação válida do YouTube.");
       return;
     }
     try {
       const response = await fetch(`/api/youtube-transcript?v=${video.id}`);
       const data = (await response.json()) as { text?: string; error?: string };
       if (!response.ok || !data.text) {
-        toast.error(data.error ?? "NÃ£o foi possÃ­vel obter a transcriÃ§Ã£o deste vÃ­deo.");
+        toast.error(data.error ?? "Não foi possível obter a transcrição deste vídeo.");
         return;
       }
       setAttachment({
-        name: "VÃ­deo do YouTube",
+        name: "Vídeo do YouTube",
         text: data.text.slice(0, MAX_FILE_CHARS),
         kind: "youtube",
         thumb: youtubeThumb(video.id),
       });
-      toast.success("TranscriÃ§Ã£o do vÃ­deo anexada ao prÃ³ximo pedido.");
+      toast.success("Transcrição do vídeo anexada ao próximo pedido.");
     } catch {
-      toast.error("NÃ£o foi possÃ­vel obter a transcriÃ§Ã£o deste vÃ­deo.");
+      toast.error("Não foi possível obter a transcrição deste vídeo.");
     }
   }
 
@@ -249,7 +249,7 @@ function Tutor() {
   async function createFlashcardsFromLast() {
     const lastMsg = msgs.filter((m) => m.role === "assistant").pop();
     if (!lastMsg) {
-      toast.error("NÃ£o hÃ¡ uma explicaÃ§Ã£o recente para criar flashcards.");
+      toast.error("Não há uma explicação recente para criar flashcards.");
       return;
     }
 
@@ -263,11 +263,11 @@ function Tutor() {
         return;
       }
 
-      const prompt = `Com base na explicaÃ§Ã£o abaixo, cria 5 pares pergunta-resposta para um flashcard de estudo. 
-Retorna APENAS um JSON vÃ¡lido neste formato (sem markdown backticks):
+      const prompt = `Com base na explicação abaixo, cria 5 pares pergunta-resposta para um flashcard de estudo.
+Retorna APENAS um JSON válido neste formato (sem markdown backticks):
 {"flashcards":[{"q":"pergunta?","a":"resposta curta"}]}
 
-ExplicaÃ§Ã£o:\n${lastMsg.content}`;
+Explicação:\n${lastMsg.content}`;
 
       const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -290,7 +290,7 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
       } | null;
 
       if (!r.ok || !data?.choices?.[0]?.message?.content) {
-        toast.error("NÃ£o consegui gerar os flashcards.");
+        toast.error("Não consegui gerar os flashcards.");
         return;
       }
 
@@ -326,19 +326,17 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
       return;
     }
     const label =
-      attachment?.kind === "youtube" ? "vÃ­deo do YouTube" : `ficheiro ${attachment?.name ?? ""}`;
+      attachment?.kind === "youtube" ? "vídeo do YouTube" : `ficheiro ${attachment?.name ?? ""}`;
     const fileContext = attachment ? contextBlock(label, attachment.text) : "";
     const displayMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o conteÃºdo anexado."}${
-        attachment
-          ? `ðŸ“Ž ${attachment.name}${attachment.kind === "youtube" ? " (vÃ­deo)" : ""}`
-          : ""
+      content: `${text || "Analisa o conteúdo anexado."}${
+        attachment ? ` 📎 ${attachment.name}${attachment.kind === "youtube" ? " (vídeo)" : ""}` : ""
       }`,
     };
     const aiMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o conteÃºdo anexado."}${fileContext}`,
+      content: `${text || "Analisa o conteúdo anexado."}${fileContext}`,
     };
     const next = [...msgs, displayMessage];
     setMsgs(next);
@@ -362,7 +360,7 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
       setStreaming(false);
       if (reply) {
         award(5);
-        toast.success("+5 XP ganhos! ðŸŽ‰", { duration: 2000 });
+        toast.success("+5 XP ganhos! 🚀", { duration: 2000 });
       }
       speak(reply);
     } catch (e) {
@@ -375,8 +373,8 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
       setNoKey(isKey);
       appendAssistantDelta(
         isKey
-          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas DefiniÃ§Ãµes."
-          : "\n\nNÃ£o consegui ligar ao tutor agora. Verifica a ligaÃ§Ã£o e a chave.",
+          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas Definições."
+          : "\n\nNão consegui ligar ao tutor agora. Verifica a ligação e a chave.",
       );
     } finally {
       setLoading(false);
@@ -386,7 +384,7 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
 
   return (
     <div className="min-w-0">
-      <PageHeader title="Tutor IA" subtitle="ExplicaÃ§Ãµes com texto, fÃ³rmulas, ficheiros, PDF, vÃ­deos e voz.">
+      <PageHeader title="Tutor IA" subtitle="Explicações com texto, fórmulas, ficheiros, PDF, vídeos e voz.">
         <Button variant="outline" size="sm" onClick={() => setMsgs([welcome])}>
           <Trash2 /> Limpar
         </Button>
@@ -432,13 +430,13 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
                 <span className="typing-dot" style={{ animationDelay: "150ms" }} />
                 <span className="typing-dot" style={{ animationDelay: "300ms" }} />
               </span>
-              A organizar uma explicaÃ§Ã£o clara...
+              A organizar uma explicação clara...
             </p>
           )}
           {noKey && (
             <div className="pl-10">
               <Button asChild size="sm">
-                <Link to="/definicoes">Abrir definiÃ§Ãµes</Link>
+                <Link to="/definicoes">Abrir definições</Link>
               </Button>
             </div>
           )}
@@ -489,7 +487,7 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
                   send();
                 }
               }}
-              placeholder="Escreve a tua dÃºvida ou cola um link do YouTube..."
+              placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
               rows={2}
               className="min-h-12 flex-1 resize-none text-sm sm:min-h-14"
             />
@@ -556,8 +554,7 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
             </div>
           </div>
           <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
-            Enter envia Â· Shift + Enter nova linha Â· PDF, textos e vÃ­deos do YouTube (colar link) atÃ©
-            18 000 caracteres
+            Enter envia · Shift + Enter nova linha · PDF, textos e vídeos do YouTube (colar link) até 18 000 caracteres
           </p>
         </div>
       </div>
@@ -566,10 +563,10 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Sparkles className="size-3.5 text-primary" />
-            A IA digita em tempo real e entende Markdown, fÃ³rmulas matemÃ¡ticas e tabelas.
+            A IA digita em tempo real e entende Markdown, fórmulas matemáticas e tabelas.
             <Youtube className="size-3.5 text-primary" />
           </div>
-          <div className="flex gap-1.5 ml-auto">
+          <div className="ml-auto flex gap-1.5">
             <Button
               variant="outline"
               size="sm"
@@ -595,3 +592,4 @@ ExplicaÃ§Ã£o:\n${lastMsg.content}`;
     </div>
   );
 }
+
