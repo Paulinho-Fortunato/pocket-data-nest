@@ -13,6 +13,8 @@ import {
   VolumeX,
   X,
   Youtube,
+  Download,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MessageContent } from "@/components/MessageContent";
@@ -28,7 +30,7 @@ import {
   parseYouTubeUrl,
   youtubeThumb,
 } from "@/lib/extract";
-import { usePersistent, useStats, type ChatMsg } from "@/lib/store";
+import { usePersistentDB, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
 
 export const Route = createFileRoute("/tutor")({
   head: () => pageHead("Tutor IA", "Um tutor que explica, questiona e ajuda-te a pensar."),
@@ -37,12 +39,12 @@ export const Route = createFileRoute("/tutor")({
 
 const welcome: ChatMsg = {
   role: "assistant",
-  content: "Olá! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?",
+  content: "OlÃ¡! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?",
 };
 const presets = [
   "Explica-me de forma simples: ",
-  "Cria 5 perguntas de revisão sobre ",
-  "Usa o método Feynman para explicar ",
+  "Cria 5 perguntas de revisÃ£o sobre ",
+  "Usa o mÃ©todo Feynman para explicar ",
 ];
 
 type Attachment = {
@@ -87,16 +89,20 @@ function validMessages(value: ChatMsg[]): ChatMsg[] {
 
 function speechText(content: string) {
   return content
-    .replace(/```[\s\S]*?```/g, " bloco de código omitido ")
-    .replace(/https?:\/\/\S+/g, " ligação ")
+    .replace(/```[\s\S]*?```/g, " bloco de cÃ³digo omitido ")
+    .replace(/https?:\/\/\S+/g, " ligaÃ§Ã£o ")
     .replace(/[*_#`>$|~]/g, "")
-    .replace(/\$[^$]+\$/g, " fórmula ")
+    .replace(/\$[^$]+\$/g, " fÃ³rmula ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+function markdownEscape(text: string): string {
+  return text.replace(/[\\`*_{}[\]()#+\-.!|]/g, "\\$&");
+}
+
 function Tutor() {
-  const [storedMsgs, setMsgs] = usePersistent<ChatMsg[]>("chat", [welcome]);
+  const [storedMsgs, setMsgs, readyMsgs] = usePersistentDB<ChatMsg[]>("chat", [welcome]);
   const msgs = validMessages(storedMsgs);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -105,7 +111,7 @@ function Tutor() {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [listening, setListening] = useState(false);
-  const { award } = useStats();
+  const { award, setStats, stats } = useStats();
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -138,7 +144,7 @@ function Tutor() {
     }
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
-      toast.error("O reconhecimento de voz não está disponível neste navegador.");
+      toast.error("O reconhecimento de voz nÃ£o estÃ¡ disponÃ­vel neste navegador.");
       return;
     }
     const recognition = new Recognition();
@@ -155,7 +161,7 @@ function Tutor() {
     recognition.onend = () => setListening(false);
     recognition.onerror = () => {
       setListening(false);
-      toast.error("Não foi possível captar a voz. Tenta novamente.");
+      toast.error("NÃ£o foi possÃ­vel captar a voz. Tenta novamente.");
     };
     recognitionRef.current = recognition;
     recognition.start();
@@ -165,7 +171,7 @@ function Tutor() {
   async function readFile(file?: File) {
     if (!file) return;
     if (!isAllowedFile(file)) {
-      toast.error("Escolhe um ficheiro de texto, Markdown, código, CSV, JSON ou PDF.");
+      toast.error("Escolhe um ficheiro de texto, Markdown, cÃ³digo, CSV, JSON ou PDF.");
       return;
     }
     try {
@@ -174,35 +180,35 @@ function Tutor() {
       toast.success(
         text.length >= MAX_FILE_CHARS
           ? "Ficheiro anexado (texto limitado a 18 000 caracteres)."
-          : "Ficheiro anexado ao próximo pedido.",
+          : "Ficheiro anexado ao prÃ³ximo pedido.",
       );
     } catch {
-      toast.error("Não foi possível ler esse ficheiro.");
+      toast.error("NÃ£o foi possÃ­vel ler esse ficheiro.");
     }
   }
 
   async function loadYouTube(url: string) {
     const video = parseYouTubeUrl(url);
     if (!video) {
-      toast.error("Cola uma ligação válida do YouTube.");
+      toast.error("Cola uma ligaÃ§Ã£o vÃ¡lida do YouTube.");
       return;
     }
     try {
       const response = await fetch(`/api/youtube-transcript?v=${video.id}`);
       const data = (await response.json()) as { text?: string; error?: string };
       if (!response.ok || !data.text) {
-        toast.error(data.error ?? "Não foi possível obter a transcrição deste vídeo.");
+        toast.error(data.error ?? "NÃ£o foi possÃ­vel obter a transcriÃ§Ã£o deste vÃ­deo.");
         return;
       }
       setAttachment({
-        name: "Vídeo do YouTube",
+        name: "VÃ­deo do YouTube",
         text: data.text.slice(0, MAX_FILE_CHARS),
         kind: "youtube",
         thumb: youtubeThumb(video.id),
       });
-      toast.success("Transcrição do vídeo anexada ao próximo pedido.");
+      toast.success("TranscriÃ§Ã£o do vÃ­deo anexada ao prÃ³ximo pedido.");
     } catch {
-      toast.error("Não foi possível obter a transcrição deste vídeo.");
+      toast.error("NÃ£o foi possÃ­vel obter a transcriÃ§Ã£o deste vÃ­deo.");
     }
   }
 
@@ -223,6 +229,94 @@ function Tutor() {
     abortRef.current?.abort();
   }
 
+  function exportConversa() {
+    const content = msgs
+      .map(
+        (m) =>
+          `**${m.role === "user" ? "Tu" : "Tutor"}:**\n\n${m.content}\n\n---\n\n`,
+      )
+      .join("");
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(
+      new Blob([content], { type: "text/markdown; charset=utf-8" }),
+    );
+    a.download = `conversa-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    toast.success("Conversa exportada como Markdown.");
+  }
+
+  async function createFlashcardsFromLast() {
+    const lastMsg = msgs.filter((m) => m.role === "assistant").pop();
+    if (!lastMsg) {
+      toast.error("NÃ£o hÃ¡ uma explicaÃ§Ã£o recente para criar flashcards.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const key = localStorage.getItem("angostudy:openrouter_key");
+      const model = localStorage.getItem("angostudy:openrouter_model") || "openrouter/free";
+      if (!key) {
+        setNoKey(true);
+        toast.error("Falta a chave OpenRouter.");
+        return;
+      }
+
+      const prompt = `Com base na explicaÃ§Ã£o abaixo, cria 5 pares pergunta-resposta para um flashcard de estudo. 
+Retorna APENAS um JSON vÃ¡lido neste formato (sem markdown backticks):
+{"flashcards":[{"q":"pergunta?","a":"resposta curta"}]}
+
+ExplicaÃ§Ã£o:\n${lastMsg.content}`;
+
+      const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": location.origin,
+          "X-Title": "AngoStudy",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 500,
+        }),
+      });
+
+      const data = (await r.json().catch(() => null)) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string };
+      } | null;
+
+      if (!r.ok || !data?.choices?.[0]?.message?.content) {
+        toast.error("NÃ£o consegui gerar os flashcards.");
+        return;
+      }
+
+      const jsonText = data.choices[0].message.content.replace(/```json\n?|\n?```/g, "");
+      const parsed = JSON.parse(jsonText) as { flashcards: { q: string; a: string }[] };
+
+      const cards = parsed.flashcards.map((f) => ({
+        id: uid(),
+        q: f.q,
+        a: f.a,
+        deck: "Gerado do Tutor",
+        known: false,
+      })) as Card[];
+
+      const existingCards = localStorage.getItem("angostudy:cards");
+      const allCards = existingCards ? JSON.parse(existingCards) : [];
+      localStorage.setItem("angostudy:cards", JSON.stringify([...allCards, ...cards]));
+
+      toast.success(`${cards.length} flashcards criados e adicionados ao teu deck!`);
+    } catch (e) {
+      toast.error(`Erro: ${e instanceof Error ? e.message : "Desconhecido"}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function send() {
     const text = input.trim();
     const youtubeUrl = parseYouTubeUrl(text);
@@ -232,17 +326,19 @@ function Tutor() {
       return;
     }
     const label =
-      attachment?.kind === "youtube" ? "vídeo do YouTube" : `ficheiro ${attachment?.name ?? ""}`;
+      attachment?.kind === "youtube" ? "vÃ­deo do YouTube" : `ficheiro ${attachment?.name ?? ""}`;
     const fileContext = attachment ? contextBlock(label, attachment.text) : "";
     const displayMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o conteúdo anexado."}${
-        attachment ? `📎 ${attachment.name}${attachment.kind === "youtube" ? " (vídeo)" : ""}` : ""
+      content: `${text || "Analisa o conteÃºdo anexado."}${
+        attachment
+          ? `ðŸ“Ž ${attachment.name}${attachment.kind === "youtube" ? " (vÃ­deo)" : ""}`
+          : ""
       }`,
     };
     const aiMessage: ChatMsg = {
       role: "user",
-      content: `${text || "Analisa o conteúdo anexado."}${fileContext}`,
+      content: `${text || "Analisa o conteÃºdo anexado."}${fileContext}`,
     };
     const next = [...msgs, displayMessage];
     setMsgs(next);
@@ -264,7 +360,10 @@ function Tutor() {
         { signal: controller.signal },
       );
       setStreaming(false);
-      if (reply) award(5);
+      if (reply) {
+        award(5);
+        toast.success("+5 XP ganhos! ðŸŽ‰", { duration: 2000 });
+      }
       speak(reply);
     } catch (e) {
       setStreaming(false);
@@ -276,8 +375,8 @@ function Tutor() {
       setNoKey(isKey);
       appendAssistantDelta(
         isKey
-          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas Definições."
-          : "\n\nNão consegui ligar ao tutor agora. Verifica a ligação e a chave.",
+          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas DefiniÃ§Ãµes."
+          : "\n\nNÃ£o consegui ligar ao tutor agora. Verifica a ligaÃ§Ã£o e a chave.",
       );
     } finally {
       setLoading(false);
@@ -287,25 +386,33 @@ function Tutor() {
 
   return (
     <div className="min-w-0">
-      <PageHeader title="Tutor IA" subtitle="Explicações com texto, fórmulas, ficheiros, PDF, vídeos e voz.">
+      <PageHeader title="Tutor IA" subtitle="ExplicaÃ§Ãµes com texto, fÃ³rmulas, ficheiros, PDF, vÃ­deos e voz.">
         <Button variant="outline" size="sm" onClick={() => setMsgs([welcome])}>
           <Trash2 /> Limpar
         </Button>
       </PageHeader>
-      <div className="panel glass flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
+      <div className="panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5">
           {msgs.map((m, i) => (
             <div
               key={`${i}-${m.role}`}
-              className={`animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-end gap-2 sm:gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
+              className={`animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-end gap-2 sm:gap-3 ${
+                m.role === "user" ? "flex-row-reverse" : ""
+              }`}
             >
               <span
-                className={`grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold sm:size-9 sm:text-[11px] ${m.role === "user" ? "bg-accent text-accent-foreground" : "bg-brand text-primary-foreground"}`}
+                className={`grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold sm:size-9 sm:text-[11px] ${
+                  m.role === "user"
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-brand text-primary-foreground"
+                }`}
               >
                 {m.role === "user" ? "EU" : "IA"}
               </span>
               <div
-                className={`glass min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${m.role === "user" ? "bg-accent/20" : "bg-secondary/60"}`}
+                className={`min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${
+                  m.role === "user" ? "bg-accent/20" : "bg-secondary/60"
+                }`}
               >
                 {m.role === "assistant" ? (
                   <MessageContent content={m.content} />
@@ -325,21 +432,21 @@ function Tutor() {
                 <span className="typing-dot" style={{ animationDelay: "150ms" }} />
                 <span className="typing-dot" style={{ animationDelay: "300ms" }} />
               </span>
-              A organizar uma explicação clara...
+              A organizar uma explicaÃ§Ã£o clara...
             </p>
           )}
           {noKey && (
             <div className="pl-10">
               <Button asChild size="sm">
-                <Link to="/definicoes">Abrir definições</Link>
+                <Link to="/definicoes">Abrir definiÃ§Ãµes</Link>
               </Button>
             </div>
           )}
           <div ref={endRef} />
         </div>
-        <div className="glass shrink-0 border-t border-border/60 p-2.5 sm:p-3">
+        <div className="shrink-0 border-t border-border/60 p-2.5 sm:p-3">
           {attachment && (
-            <div className="glass-highlight mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
               {attachment.kind === "youtube" && attachment.thumb ? (
                 <img
                   src={attachment.thumb}
@@ -366,7 +473,7 @@ function Tutor() {
                 key={p}
                 type="button"
                 onClick={() => setInput(p)}
-                className="glass glass-highlight shrink-0 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                className="shrink-0 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground border border-border bg-secondary/30"
               >
                 {p.replace(/[: ]+$/, "").replace(/ sobre$| para explicar$/, "")}
               </button>
@@ -382,7 +489,7 @@ function Tutor() {
                   send();
                 }
               }}
-              placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
+              placeholder="Escreve a tua dÃºvida ou cola um link do YouTube..."
               rows={2}
               className="min-h-12 flex-1 resize-none text-sm sm:min-h-14"
             />
@@ -449,16 +556,42 @@ function Tutor() {
             </div>
           </div>
           <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
-            Enter envia · Shift + Enter nova linha · PDF, textos e vídeos do YouTube (colar link) até
+            Enter envia Â· Shift + Enter nova linha Â· PDF, textos e vÃ­deos do YouTube (colar link) atÃ©
             18 000 caracteres
           </p>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        <Sparkles className="size-3.5 text-primary" />
-        A IA digita em tempo real e entende Markdown, fórmulas matemáticas e tabelas.
-        <Youtube className="size-3.5 text-primary" />
-      </div>
+
+      {readyMsgs && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Sparkles className="size-3.5 text-primary" />
+            A IA digita em tempo real e entende Markdown, fÃ³rmulas matemÃ¡ticas e tabelas.
+            <Youtube className="size-3.5 text-primary" />
+          </div>
+          <div className="flex gap-1.5 ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportConversa}
+              className="text-xs"
+            >
+              <Download className="size-3.5 mr-1" />
+              Exportar conversa
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={createFlashcardsFromLast}
+              disabled={loading || msgs.filter((m) => m.role === "assistant").length === 0}
+              className="text-xs"
+            >
+              <Plus className="size-3.5 mr-1" />
+              Flashcards
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
