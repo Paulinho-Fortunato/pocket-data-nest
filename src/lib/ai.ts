@@ -18,7 +18,13 @@ export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promis
     },
     body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...messages] }),
   });
-  const data = await r.json();
+  const data = (await r.json().catch(() => null)) as {
+    choices?: { message?: { content?: string } }[];
+    error?: { message?: string };
+  } | null;
+  if (!r.ok) {
+    throw new Error(data?.error?.message || `Pedido falhou (${r.status})`);
+  }
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error(data?.error?.message || "Sem resposta");
   return text;

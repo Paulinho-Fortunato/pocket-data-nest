@@ -2,7 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bot, Layers, ListChecks, Timer, ArrowRight } from "lucide-react";
 import { pageHead } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { defaultCards, levelOf, usePersistent, useStats, XP_PER_LEVEL, type Card } from "@/lib/store";
+import {
+  defaultCards,
+  levelOf,
+  usePersistent,
+  useStats,
+  XP_PER_LEVEL,
+  type Card,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => pageHead("Início", "O teu painel de estudo: progresso, metas e ferramentas."),
@@ -11,7 +18,12 @@ export const Route = createFileRoute("/")({
 
 const tools = [
   { to: "/tutor", icon: Bot, title: "Tutor IA", text: "Explica qualquer conceito ao teu ritmo." },
-  { to: "/flashcards", icon: Layers, title: "Flashcards", text: "Revê com prática de recuperação." },
+  {
+    to: "/flashcards",
+    icon: Layers,
+    title: "Flashcards",
+    text: "Revê com prática de recuperação.",
+  },
   { to: "/quiz", icon: ListChecks, title: "Quiz", text: "Descobre onde podes melhorar." },
   { to: "/foco", icon: Timer, title: "Modo foco", text: "Protege o teu tempo de estudo." },
 ] as const;
@@ -23,11 +35,19 @@ function Dashboard() {
   const pending = cards.filter((c) => !c.known).length;
   const lvlXp = stats.xp % XP_PER_LEVEL;
   const goalPct = Math.min(100, (stats.sessions / stats.weeklyGoal) * 100);
-  const date = new Date().toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+  const date = new Date().toLocaleDateString("pt-PT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
   const statCards = [
     { label: "Taxa de acerto", value: `${accuracy}%`, hint: `${stats.answered} respostas` },
-    { label: "Tempo focado", value: `${Math.floor(stats.focusMinutes / 60)}h ${stats.focusMinutes % 60}m`, hint: `${stats.sessions} sessões` },
+    {
+      label: "Tempo focado",
+      value: `${Math.floor(stats.focusMinutes / 60)}h ${stats.focusMinutes % 60}m`,
+      hint: `${stats.sessions} sessões`,
+    },
     { label: "Cartões por rever", value: pending, hint: `${cards.length} no total` },
     { label: `Nível ${levelOf(stats.xp)}`, value: `${lvlXp}`, hint: `/ ${XP_PER_LEVEL} XP` },
   ];
@@ -47,13 +67,17 @@ function Dashboard() {
           <span className="relative rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
             Plano inteligente
           </span>
-          <h2 className="relative mt-4 max-w-md text-2xl font-semibold">Transforma dúvidas em domínio.</h2>
+          <h2 className="relative mt-4 max-w-md text-2xl font-semibold">
+            Transforma dúvidas em domínio.
+          </h2>
           <p className="relative mt-2 max-w-md text-sm text-muted-foreground">
             Esclarece um conceito com o tutor, pratica com flashcards e consolida com um quiz.
           </p>
           <div className="relative mt-5 flex flex-wrap gap-2">
             <Button asChild>
-              <Link to="/tutor">Começar sessão <ArrowRight /></Link>
+              <Link to="/tutor">
+                Começar sessão <ArrowRight />
+              </Link>
             </Button>
             <Button asChild variant="outline">
               <Link to="/progresso">Ver progresso</Link>
@@ -62,10 +86,15 @@ function Dashboard() {
           <div className="relative mt-6">
             <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
               <span>Meta semanal</span>
-              <span>{stats.sessions} de {stats.weeklyGoal} sessões de foco</span>
+              <span>
+                {stats.sessions} de {stats.weeklyGoal} sessões de foco
+              </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${goalPct}%` }} />
+              <div
+                className="h-full rounded-full bg-brand transition-all"
+                style={{ width: `${goalPct}%` }}
+              />
             </div>
           </div>
         </section>
@@ -84,7 +113,11 @@ function Dashboard() {
         <h2 className="mb-3 text-xl font-semibold">Escolhe uma ferramenta</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {tools.map(({ to, icon: Icon, title, text }) => (
-            <Link key={to} to={to} className="panel group p-5 transition hover:-translate-y-0.5 hover:border-primary/40">
+            <Link
+              key={to}
+              to={to}
+              className="panel group p-5 transition hover:-translate-y-0.5 hover:border-primary/40"
+            >
               <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
                 <Icon className="size-5" />
               </span>

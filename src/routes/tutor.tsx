@@ -12,7 +12,10 @@ export const Route = createFileRoute("/tutor")({
   component: Tutor,
 });
 
-const welcome: ChatMsg = { role: "assistant", content: "Olá! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?" };
+const welcome: ChatMsg = {
+  role: "assistant",
+  content: "Olá! Sou o teu tutor AngoStudy. Que disciplina ou conceito queres dominar hoje?",
+};
 const presets = [
   "Explica-me de forma simples: ",
   "Cria 5 perguntas de revisão sobre ",
@@ -44,7 +47,15 @@ function Tutor() {
     } catch (e) {
       const isKey = e instanceof Error && e.message === "NO_KEY";
       setNoKey(isKey);
-      setMsgs([...next, { role: "assistant", content: isKey ? "Para eu responder, adiciona a tua chave OpenRouter nas Definições." : "Não consegui ligar ao tutor agora. Verifica a ligação e a chave." }]);
+      setMsgs([
+        ...next,
+        {
+          role: "assistant",
+          content: isKey
+            ? "Para eu responder, adiciona a tua chave OpenRouter nas Definições."
+            : "Não consegui ligar ao tutor agora. Verifica a ligação e a chave.",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -61,18 +72,28 @@ function Tutor() {
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           {msgs.map((m, i) => (
             <div key={i} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-              <span className={`grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-bold ${m.role === "user" ? "bg-accent text-accent-foreground" : "bg-brand text-primary-foreground"}`}>
+              <span
+                className={`grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-bold ${m.role === "user" ? "bg-accent text-accent-foreground" : "bg-brand text-primary-foreground"}`}
+              >
                 {m.role === "user" ? "EU" : "IA"}
               </span>
-              <div className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "bg-accent/20" : "bg-secondary"}`}>
+              <div
+                className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "bg-accent/20" : "bg-secondary"}`}
+              >
                 {m.content}
               </div>
             </div>
           ))}
-          {loading && <p className="pl-11 text-sm text-muted-foreground animate-pulse">A organizar uma explicação clara...</p>}
+          {loading && (
+            <p className="pl-11 text-sm text-muted-foreground animate-pulse">
+              A organizar uma explicação clara...
+            </p>
+          )}
           {noKey && (
             <div className="pl-11">
-              <Button asChild size="sm"><Link to="/definicoes">Abrir definições</Link></Button>
+              <Button asChild size="sm">
+                <Link to="/definicoes">Abrir definições</Link>
+              </Button>
             </div>
           )}
           <div ref={endRef} />
@@ -80,7 +101,11 @@ function Tutor() {
         <div className="border-t border-border p-3">
           <div className="mb-2 flex flex-wrap gap-2">
             {presets.map((p) => (
-              <button key={p} onClick={() => setInput(p)} className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground">
+              <button
+                key={p}
+                onClick={() => setInput(p)}
+                className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              >
                 {p.replace(/[: ]+$/, "").replace(/ sobre$| para explicar$/, "")}
               </button>
             ))}
@@ -99,7 +124,13 @@ function Tutor() {
               rows={2}
               className="resize-none"
             />
-            <Button onClick={send} disabled={loading} size="icon" className="h-auto w-12" aria-label="Enviar">
+            <Button
+              onClick={send}
+              disabled={loading}
+              size="icon"
+              className="h-auto w-12"
+              aria-label="Enviar"
+            >
               <Send />
             </Button>
           </div>

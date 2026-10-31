@@ -15,8 +15,14 @@ export function readStore<T>(key: string, fallback: T): T {
 }
 
 export function writeStore<T>(key: string, value: T) {
-  localStorage.setItem(PREFIX + key, JSON.stringify(value));
-  window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PREFIX + key, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
+  } catch {
+    // Private browsing and storage quotas can reject writes. The in-memory
+    // state still updates, so the current session remains usable.
+  }
 }
 
 /** useState that persists to localStorage and syncs between components/tabs. */
@@ -84,9 +90,27 @@ export const defaultStats: Stats = {
 };
 
 export const defaultCards: Card[] = [
-  { id: "c1", deck: "Matemática", q: "Qual é a derivada de f(x) = x²?", a: "f'(x) = 2x", known: false },
-  { id: "c2", deck: "História", q: "Principal causa da Revolução Francesa?", a: "Crise financeira, desigualdade social e insatisfação do Terceiro Estado.", known: false },
-  { id: "c3", deck: "Física", q: "O que diz a 1.ª Lei de Newton?", a: "Um corpo mantém repouso ou movimento uniforme se nenhuma força resultante atuar sobre ele.", known: false },
+  {
+    id: "c1",
+    deck: "Matemática",
+    q: "Qual é a derivada de f(x) = x²?",
+    a: "f'(x) = 2x",
+    known: false,
+  },
+  {
+    id: "c2",
+    deck: "História",
+    q: "Principal causa da Revolução Francesa?",
+    a: "Crise financeira, desigualdade social e insatisfação do Terceiro Estado.",
+    known: false,
+  },
+  {
+    id: "c3",
+    deck: "Física",
+    q: "O que diz a 1.ª Lei de Newton?",
+    a: "Um corpo mantém repouso ou movimento uniforme se nenhuma força resultante atuar sobre ele.",
+    known: false,
+  },
   { id: "c4", deck: "Matemática", q: "Qual é o valor de ∫ 2x dx?", a: "x² + C", known: false },
 ];
 
@@ -95,8 +119,15 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 export const XP_PER_LEVEL = 300;
 export const levelOf = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
 
+export function dateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  return dateKey();
 }
 
 /** Consecutive days with activity ending today (or yesterday). */
@@ -105,7 +136,7 @@ export function streak(days: string[]) {
   let n = 0;
   const d = new Date();
   if (!set.has(today())) d.setDate(d.getDate() - 1);
-  while (set.has(d.toISOString().slice(0, 10))) {
+  while (set.has(dateKey(d))) {
     n++;
     d.setDate(d.getDate() - 1);
   }
