@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 md:px-6 md:pb-10">
-      <header className="sticky top-0 z-20 -mx-4 flex h-16 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:-mx-6 md:px-6">
+      <header className="glass sticky top-0 z-20 -mx-4 flex h-16 items-center justify-between border-border/60 px-4 md:-mx-6 md:px-6">
         <Link to="/" className="flex items-center gap-3">
           <span className="grid size-9 place-items-center rounded-xl bg-brand text-primary-foreground shadow-glow">
             <GraduationCap className="size-5" />
@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={to}
                 to={to}
                 activeOptions={{ exact: to === "/" }}
-                className="flex items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground data-[status=active]:border-primary/25 data-[status=active]:bg-primary/10 data-[status=active]:text-foreground"
+                className="glass-highlight flex items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground data-[status=active]:border-primary/25 data-[status=active]:bg-primary/10 data-[status=active]:text-foreground"
               >
                 <Icon className="size-4" />
                 {label}
@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-border bg-background/95 py-2 backdrop-blur md:hidden">
+      <nav className="glass fixed inset-x-0 bottom-0 z-30 flex justify-around py-2 md:hidden">
         {nav.slice(0, 6).map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
