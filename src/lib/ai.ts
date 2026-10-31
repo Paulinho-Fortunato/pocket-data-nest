@@ -3,6 +3,50 @@ import { readStore, type ChatMsg } from "./store";
 export const SYSTEM_PROMPT =
   "És o tutor AngoStudy. Responde em português, de forma pedagógica, clara e rigorosa. Usa perguntas de verificação e não dês apenas a resposta final quando o estudante precisa de aprender.";
 
+export async function testAIConnection(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const key = readStore<string>("openrouter_key", "").trim();
+  const model = readStore<string>("openrouter_model", "openrouter/free");
+
+  if (!key) {
+    return { ok: false, error: "Adiciona uma chave OpenRouter nas definições." };
+  }
+
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": location.origin,
+        "X-Title": "AngoStudy",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "Testar ligação" }],
+        max_tokens: 1,
+      }),
+    });
+
+    const data = (await r.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+
+    if (!r.ok) {
+      return {
+        ok: false,
+        error: data?.error?.message || `Pedido falhou (${r.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Erro inesperado ao testar a ligação.",
+    };
+  }
+}
+
 /** Calls OpenRouter directly from the browser using the key the user saved locally. */
 export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promise<string> {
   const key = readStore<string>("openrouter_key", "");
