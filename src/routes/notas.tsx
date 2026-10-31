@@ -29,7 +29,7 @@ function Notas() {
     active && setNotes((ns) => ns.map((n) => (n.id === active.id ? { ...n, ...p, updated: Date.now() } : n)));
 
   async function summarize() {
-    if (!active?.body.trim()) return toast.error("Escreve algo primeiro.");
+    if (!active?.body.trim()) { toast.error("Escreve algo primeiro."); return; }
     setBusy(true);
     try {
       const s = await askAI([{ role: "user", content: `Resume estas notas em tópicos claros e curtos:\n\n${active.body}` }]);

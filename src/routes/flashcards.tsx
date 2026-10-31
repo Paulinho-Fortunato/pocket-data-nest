@@ -41,7 +41,7 @@ function Flashcards() {
   }
 
   function add() {
-    if (!form.q.trim() || !form.a.trim()) return toast.error("Preenche pergunta e resposta.");
+    if (!form.q.trim() || !form.a.trim()) { toast.error("Preenche pergunta e resposta."); return; }
     setCards((cs) => [...cs, { id: uid(), q: form.q.trim(), a: form.a.trim(), deck: form.deck.trim() || "Geral", known: false }]);
     setForm({ q: "", a: "", deck: form.deck });
     toast.success("Cartão adicionado.");
