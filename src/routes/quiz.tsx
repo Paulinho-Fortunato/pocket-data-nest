@@ -36,7 +36,7 @@ function Quiz() {
   function pick(o: string) {
     if (picked || !qs) return;
     setPicked(o);
-    const ok = o === qs[i].answer;
+    const ok = o === qs[i]?.answer;
     if (ok) setScore((s) => s + 1);
     award(ok ? 10 : 0, (s) => ({ answered: s.answered + 1, correct: s.correct + (ok ? 1 : 0) }));
   }
@@ -68,16 +68,16 @@ function Quiz() {
           <p className="mt-1 text-muted-foreground">{score === qs.length ? "Perfeito!" : "Revê os cartões em que falhaste."}</p>
           <Button className="mt-6" onClick={start}>Novo quiz</Button>
         </div>
-      ) : (
+      ) : (() => { const cur = qs[i]!; return (
         <div className="panel p-6">
           <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-muted">
             <div className="h-full bg-brand transition-all" style={{ width: `${(i / qs.length) * 100}%` }} />
           </div>
           <p className="text-xs text-muted-foreground">Pergunta {i + 1} de {qs.length}</p>
-          <h2 className="mt-2 text-xl font-semibold">{qs[i].q}</h2>
+          <h2 className="mt-2 text-xl font-semibold">{cur.q}</h2>
           <div className="mt-5 grid gap-2">
-            {qs[i].options.map((o, k) => {
-              const state = !picked ? "" : o === qs[i].answer ? "border-success bg-success/15" : o === picked ? "border-destructive bg-destructive/15" : "opacity-60";
+            {cur.options.map((o, k) => {
+              const state = !picked ? "" : o === cur.answer ? "border-success bg-success/15" : o === picked ? "border-destructive bg-destructive/15" : "opacity-60";
               return (
                 <button key={k} onClick={() => pick(o)} className={`rounded-xl border border-border p-3 text-left text-sm transition hover:border-primary/50 ${state}`}>
                   {o}
@@ -87,7 +87,7 @@ function Quiz() {
           </div>
           {picked && <Button className="mt-5" onClick={next}>{i + 1 >= qs.length ? "Ver resultado" : "Seguinte"}</Button>}
         </div>
-      )}
+      ); })()}
     </div>
   );
 }
