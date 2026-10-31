@@ -25,7 +25,7 @@ export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promis
   if (!r.ok) {
     throw new Error(data?.error?.message || `Pedido falhou (${r.status})`);
   }
-  comst text = data?.choices?.[0]?.message?.content;
+  const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error(data?.error?.message || "Sem resposta");
   return text;
 }
@@ -33,6 +33,10 @@ export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promis
 /**
  * Streams the answer from OpenRouter (SSE) so the UI can render text as the
  * model types. Returns the full text once the stream completes.
+ *
+ * OpenRouter occasionally sends SSE comments like ": OPENROUTER PROCESSING"
+ * to keep the connection alive; per the SSE spec they are not JSON payloads
+ * and must be ignored.
  */
 export async function askAIStream(
   messages: ChatMsg[],
@@ -40,14 +44,14 @@ export async function askAIStream(
   options: { system?: string; signal?: AbortSignal } = {},
 ): Promise<string> {
   const key = readStore<string>("openrouter_key", "");
-  if (!key) throw new Error("NO_KEY");
   const model = readStore<string>("openrouter_model", "openrouter/free");
+  if (!key) throw new Error("NO_KEY");
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal: options.signal,
     headers: {
-      Comtent-Type: "application/json",
       Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
       "HTTP-Referer": location.origin,
       "X-Title": "AngoStudy",
     },
