@@ -1,0 +1,20 @@
+{
+  "name": "AngoStudy — Estuda melhor",
+  "short_name": "AngoStudy",
+  "description": "Tutor IA, flashcards, quizzes, pomodoro e notas — tudo guardado no teu dispositivo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1626",
+  "theme_color": "#0b1626",
+  "lang": "pt-PT",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
