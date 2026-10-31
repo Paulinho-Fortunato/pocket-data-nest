@@ -22,8 +22,20 @@ const presets = [
   "Usa o método Feynman para explicar ",
 ];
 
+function validMessages(value: ChatMsg[]): ChatMsg[] {
+  if (!Array.isArray(value)) return [welcome];
+  const messages = value.filter(
+    (message): message is ChatMsg =>
+      Boolean(message) &&
+      (message.role === "user" || message.role === "assistant") &&
+      typeof message.content === "string",
+  );
+  return messages.length ? messages : [welcome];
+}
+
 function Tutor() {
-  const [msgs, setMsgs] = usePersistent<ChatMsg[]>("chat", [welcome]);
+  const [storedMsgs, setMsgs] = usePersistent<ChatMsg[]>("chat", [welcome]);
+  const msgs = validMessages(storedMsgs);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [noKey, setNoKey] = useState(false);
