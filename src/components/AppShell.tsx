@@ -1,5 +1,5 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import {
   BarChart3,
   BookOpen,
@@ -9,12 +9,13 @@ import {
   Home,
   Layers,
   ListChecks,
+  Menu,
   NotebookPen,
   Settings,
   Timer,
+  X,
   Zap,
 } from "lucide-react";
-import { ToolMenu } from "@/components/ToolMenu";
 import { levelOf, streak, useStats } from "@/lib/store";
 
 const nav = [
@@ -29,8 +30,11 @@ const nav = [
   { to: "/definicoes", label: "Definições", icon: Settings },
 ] as const;
 
+const desktopNav = [nav[0], nav[1], nav[2], nav[3], nav[4]];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { stats } = useStats();
+  const [menuOpen, setMenuOpen] = useState(false);
   const initials = stats.name
     .split(" ")
     .map((w) => w[0])
@@ -38,11 +42,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
 
+  /* fecha o menu mobile ao navegar */
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    window.addEventListener("hashchange", close);
+    window.addEventListener("popstate", close);
+    return () => {
+      window.removeEventListener("hashchange", close);
+      window.removeEventListener("popstate", close);
+    };
+  }, [menuOpen]);
+
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-24 md:px-6 md:pb-10">
-      <header className="glass sticky top-0 z-20 -mx-4 flex h-16 items-center justify-between border-border/60 px-4 md:-mx-6 md:px-6">
-        <Link to="/" className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-xl bg-brand text-primary-foreground shadow-glow">
+    <div className="mx-auto max-w-7xl px-4 pb-10 md:px-6">
+      <header className="topbar">
+        <span className="topbar-beam" aria-hidden="true" />
+        <span className="nav-particles" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+
+        <Link to="/" className="topbar-brand">
+          <span className="topbar-logo">
             <GraduationCap className="size-5" />
           </span>
           <span>
@@ -50,35 +75,73 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="text-[11px] text-muted-foreground">Aprende com intenção</span>
           </span>
         </Link>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-muted-foreground sm:flex">
+
+        <nav className="topbar-nav" aria-label="Navegação principal">
+          {desktopNav.map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              activeOptions={{ exact: to === "/" }}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Icon />
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="topbar-stats">
+          <span className="stat-chip hidden sm:inline-flex">
             <Flame className="size-3.5 text-warning" />
-            <strong className="text-foreground">{streak(stats.days)}</strong> dias
+            <strong>{streak(stats.days)}</strong> dias
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-muted-foreground">
+          <span className="stat-chip">
             <Zap className="size-3.5 text-warning" />
-            <strong className="text-foreground">{stats.xp}</strong> XP · Nv {levelOf(stats.xp)}
+            <strong>{stats.xp}</strong> XP · Nv {levelOf(stats.xp)}
           </span>
-          <Link
-            to="/definicoes"
-            className="grid size-8 place-items-center rounded-full bg-brand text-[11px] font-bold text-primary-foreground"
-            aria-label="Perfil"
-          >
+          <Link to="/definicoes" className="avatar-chip" aria-label="Perfil">
             {initials || "AS"}
           </Link>
+          <button
+            type="button"
+            className="icon-btn lg:hidden"
+            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+          </button>
         </div>
+
+        {menuOpen && (
+          <>
+            <div
+              className="mobile-menu-overlay"
+              aria-hidden="true"
+              onClick={() => setMenuOpen(false)}
+            />
+            <nav className="mobile-menu" aria-label="Navegação">
+              {nav.map(({ to, label, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  activeOptions={{ exact: to === "/" }}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <Icon />
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </>
+        )}
       </header>
 
       <div className="grid gap-7 pt-7 md:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="hidden md:block">
-          <nav className="sticky top-24 grid gap-1">
+          <nav className="sidebar-nav sticky top-24">
             {nav.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                activeOptions={{ exact: to === "/" }}
-                className="glass-highlight flex items-center gap-3 rounded-xl border border-transparent px-3.5 py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground data-[status=active]:border-primary/25 data-[status=active]:bg-primary/10 data-[status=active]:text-foreground"
-              >
+              <Link key={to} to={to} activeOptions={{ exact: to === "/" }}>
                 <Icon className="size-4" />
                 {label}
               </Link>
@@ -87,21 +150,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
         <main className="min-w-0">{children}</main>
       </div>
-
-      {/* Mobile bottom nav */}
-      <nav className="glass fixed inset-x-0 bottom-0 z-30 flex justify-around py-2 md:hidden">
-        {nav.slice(0, 6).map(({ to, label, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            activeOptions={{ exact: to === "/" }}
-            className="flex flex-col items-center gap-0.5 px-2 text-[10px] text-muted-foreground data-[status=active]:text-primary"
-          >
-            <Icon className="size-5" />
-            {label.split(" ")[0]}
-          </Link>
-        ))}
-      </nav>
     </div>
   );
 }
