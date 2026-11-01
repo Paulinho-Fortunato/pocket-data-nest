@@ -20,14 +20,24 @@ const icons = {
   volumeOn: (
     <svg viewBox="0 0 16 16" fill="currentColor" height="20" width="20" aria-hidden="true">
       <path d="M8.5 1.262a.5.5 0 0 1 .737-.441 7 7 0 0 1 0 12.358.5.5 0 0 1-.737-.44zM12 4a.5.5 0 0 1 .703.718L11.352 8l1.351 3.282A.5.5 0 0 1 12 12l-.156-.005a4.5 4.5 0 0 1-.311-.078l-.872-2.72a.5.5 0 0 1 0-.066l.872-2.72q.158-.047.311-.078zm1.879-2.879a.5.5 0 0 1 .708 0A6.97 6.97 0 0 1 16 8a6.97 6.97 0 0 1-1.713 4.879.5.5 0 1 1-.708-.708A5.97 5.97 0 0 0 15 8a5.97 5.97 0 0 0-1.421-4.171.5.5 0 0 1 0-.708M6 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5" />
-      <path d="M4.879 5.121 1.5 2V14l3.379-3.121L9 14V2z" fillRule="evenodd" clipRule="evenodd" transform="scale(-1,1) translate(-11,0)" />
+      <path
+        d="M4.879 5.121 1.5 2V14l3.379-3.121L9 14V2z"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        transform="scale(-1,1) translate(-11,0)"
+      />
     </svg>
   ),
   volumeOff: (
     <svg viewBox="0 0 16 16" fill="currentColor" height="20" width="20" aria-hidden="true">
       <path d="M8.5 1.262a.5.5 0 0 1 .737-.441 7 7 0 0 1 0 12.358.5.5 0 0 1-.737-.44zM6 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5" />
       <path d="m1.5 2 12 12 .708-.708-12-12z" />
-      <path d="M4.879 5.121 1.5 2V14l3.379-3.121L9 14v-3.354" fillRule="evenodd" clipRule="evenodd" transform="scale(-1,1) translate(-11,0)" />
+      <path
+        d="M4.879 5.121 1.5 2V14l3.379-3.121L9 14v-3.354"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        transform="scale(-1,1) translate(-11,0)"
+      />
     </svg>
   ),
   camera: (
@@ -122,9 +132,28 @@ export function AIInput({
 
   return (
     <div className="ai-input">
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => pick("camera", e.target.files?.[0])} />
-      <input ref={photosRef} type="file" accept="image/*" multiple hidden onChange={(e) => pick("photos", e.target.files?.[0])} />
-      <input ref={filesRef} type="file" hidden onChange={(e) => pick("files", e.target.files?.[0])} />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => pick("camera", e.target.files?.[0])}
+      />
+      <input
+        ref={photosRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => pick("photos", e.target.files?.[0])}
+      />
+      <input
+        ref={filesRef}
+        type="file"
+        hidden
+        onChange={(e) => pick("files", e.target.files?.[0])}
+      />
 
       {suggestions.length > 0 && (
         <div className="chat-marquee" aria-hidden="true">
@@ -147,42 +176,54 @@ export function AIInput({
       )}
 
       <div className="chat-container">
-        {appendixOpen && (
-          <div className="appendix-bar" role="menu" aria-label="Anexar conteúdo">
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Fechar anexos"
-              onClick={() => setAppendixOpen(false)}
-            >
-              <X height={22} width={22} />
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Tirar foto com a câmara"
-              onClick={() => cameraRef.current?.click()}
-            >
-              {icons.camera}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Escolher fotos"
-              onClick={() => photosRef.current?.click()}
-            >
-              {icons.photos}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="Anexar ficheiro"
-              onClick={() => filesRef.current?.click()}
-            >
-              {icons.files}
-            </button>
-          </div>
-        )}
+        <div
+          className="appendix-bar"
+          data-open={String(appendixOpen)}
+          role="menu"
+          aria-label="Anexar conteúdo"
+          aria-hidden={!appendixOpen}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-label="Fechar"
+            aria-label="Fechar anexos"
+            tabIndex={appendixOpen ? 0 : -1}
+            onClick={() => setAppendixOpen(false)}
+          >
+            <X height={22} width={22} />
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-label="Câmara"
+            aria-label="Tirar foto com a câmara"
+            tabIndex={appendixOpen ? 0 : -1}
+            onClick={() => cameraRef.current?.click()}
+          >
+            {icons.camera}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-label="Fotos"
+            aria-label="Escolher fotos"
+            tabIndex={appendixOpen ? 0 : -1}
+            onClick={() => photosRef.current?.click()}
+          >
+            {icons.photos}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-label="Ficheiro"
+            aria-label="Anexar ficheiro"
+            tabIndex={appendixOpen ? 0 : -1}
+            onClick={() => filesRef.current?.click()}
+          >
+            {icons.files}
+          </button>
+        </div>
 
         <div className="chat-wrapper">
           <textarea
@@ -210,7 +251,13 @@ export function AIInput({
                 aria-expanded={appendixOpen}
                 onClick={() => setAppendixOpen((open) => !open)}
               >
-                <svg viewBox="0 0 16 16" fill="currentColor" height="20" width="20" aria-hidden="true">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  height="20"
+                  width="20"
+                  aria-hidden="true"
+                >
                   <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0z" />
                 </svg>
               </button>
@@ -243,7 +290,9 @@ export function AIInput({
                   type="button"
                   className="icon-drop"
                   data-on={voiceEnabled || undefined}
-                  aria-label={voiceEnabled ? "Desligar leitura por voz" : "Ler respostas em voz alta"}
+                  aria-label={
+                    voiceEnabled ? "Desligar leitura por voz" : "Ler respostas em voz alta"
+                  }
                   aria-pressed={voiceEnabled}
                   onClick={onToggleVoice}
                 >
