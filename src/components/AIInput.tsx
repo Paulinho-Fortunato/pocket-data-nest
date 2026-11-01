@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FileText, Search, X } from "lucide-react";
+import { ClipboardPaste, FileText, Search, X } from "lucide-react";
 
 /* Composer estilo ChatGPT (adaptado de Uiverse.io by AshtonLiou),
    com as cores/interacções do tema AngoStudy. */
@@ -130,6 +130,17 @@ export function AIInput({
     if (el) el.value = "";
   }
 
+  async function pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      onChange(value ? `${value}\n${text}` : text);
+      taRef.current?.focus();
+    } catch {
+      // Browsers can deny clipboard access without a user-visible error.
+    }
+  }
+
   return (
     <div className="ai-input">
       <input
@@ -248,6 +259,14 @@ export function AIInput({
           />
           <div className="button-bar">
             <div className="left-buttons">
+              <button
+                type="button"
+                className="icon-drop"
+                aria-label="Colar texto da área de transferência"
+                onClick={pasteFromClipboard}
+              >
+                <ClipboardPaste className="size-[18px]" />
+              </button>
               <button
                 type="button"
                 className="icon-drop"

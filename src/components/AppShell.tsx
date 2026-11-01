@@ -5,7 +5,6 @@ import {
   BookOpen,
   Bot,
   Flame,
-  GraduationCap,
   Home,
   Layers,
   ListChecks,
@@ -65,23 +64,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-frame mx-auto min-h-dvh max-w-7xl px-4 pb-28 md:px-6">
       {/* ── Top bar compacta estilo app ─────────────────────────────── */}
       <header className="topbar">
-        <span className="topbar-beam" aria-hidden="true" />
-        <span className="nav-particles" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
-
         <Link to="/" className="topbar-brand">
-          <span className="topbar-logo">
-            <GraduationCap className="size-5" />
+          <span className="topbar-logo" aria-hidden="true">
+            AS
           </span>
-          <span>
-            <span className="block font-display text-lg font-bold leading-none">AngoStudy</span>
-            <span className="text-[11px] text-muted-foreground">Aprende com intenção</span>
-          </span>
+          <span className="topbar-wordmark">AngoStudy</span>
         </Link>
 
         <div className="topbar-stats">
@@ -132,12 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* ── Bottom navigation fixa (app nativo) ─────────────────────── */}
       <nav className="tabbar" aria-label="Navegação principal">
         {tabPrimary.map(({ to, short, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            activeOptions={{ exact: to === "/" }}
-            onPointerDown={spawnRipple}
-          >
+          <Link key={to} to={to} activeOptions={{ exact: to === "/" }} onPointerDown={spawnRipple}>
             <Icon />
             <span>{short}</span>
           </Link>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Copy,
   Download,
+  ArrowDown,
   FileJson,
   FileText,
   Plus,
@@ -53,6 +54,11 @@ const presets = [
   "Explica-me de forma simples: ",
   "Cria 5 perguntas de revisão sobre ",
   "Usa o método Feynman para explicar ",
+  "Dá-me um exemplo prático de ",
+  "Compara estes dois conceitos: ",
+  "Testa-me com perguntas sobre ",
+  "Resume este conteúdo: ",
+  "Cria um plano de estudo para ",
 ];
 
 type Attachment = {
@@ -120,12 +126,20 @@ function Tutor() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [listening, setListening] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
+  const [showScrollLatest, setShowScrollLatest] = useState(false);
   const { award, setStats, stats } = useStats();
   const endRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [msgs, loading]);
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 180) endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs, loading]);
   useEffect(
     () => () => {
       recognitionRef.current?.stop();
@@ -443,7 +457,17 @@ Explicação:\n${lastMsg.content}`;
         </Button>
       </PageHeader>
       <div className="panel tutor-panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
-        <div className="tutor-messages min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5">
+        <div
+          ref={messagesRef}
+          onScroll={() => {
+            const container = messagesRef.current;
+            if (!container) return;
+            setShowScrollLatest(
+              container.scrollHeight - container.scrollTop - container.clientHeight > 180,
+            );
+          }}
+          className="tutor-messages min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5"
+        >
           {msgs.map((m, i) => (
             <div
               key={`${i}-${m.role}`}
@@ -495,6 +519,15 @@ Explicação:\n${lastMsg.content}`;
           )}
           <div ref={endRef} />
         </div>
+        <button
+          type="button"
+          className={`scroll-latest ${showScrollLatest ? "is-visible" : ""}`}
+          aria-label="Descer para a mensagem mais recente"
+          onClick={() => endRef.current?.scrollIntoView({ behavior: "smooth" })}
+        >
+          <ArrowDown className="size-4" />
+          <span>Ir para o fim</span>
+        </button>
         <div className="tutor-composer shrink-0 border-t border-border/60 p-2.5 sm:p-3">
           {attachment && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
@@ -524,7 +557,7 @@ Explicação:\n${lastMsg.content}`;
             onSubmit={send}
             onAbort={stopStreaming}
             placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
-            suggestions={[...presets, "Resume este vídeo:", "Cria um plano de estudo para"]}
+            suggestions={presets}
             listening={listening}
             onToggleMic={toggleListening}
             voiceEnabled={voiceEnabled}

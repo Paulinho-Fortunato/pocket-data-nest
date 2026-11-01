@@ -1320,7 +1320,7 @@ body {
 }
 
 .more-sheet {
-  animation: none !important;
+  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 
 .tab-ripple {
@@ -1335,5 +1335,129 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ── Acabamento app nativa: wordmark, prompts e controlos de conversa ── */
+.topbar-brand {
+  gap: 0.65rem;
+}
+
+.topbar-logo {
+  display: grid !important;
+  width: 2.15rem !important;
+  height: 2.15rem !important;
+  place-items: center;
+  border: 1px solid #2c2c2c;
+  border-radius: 0.7rem;
+  background: #101010 !important;
+  color: var(--primary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: -0.12em;
+  line-height: 1;
+  box-shadow: 3px 3px 0 var(--primary);
+  animation: none !important;
+}
+
+.topbar-wordmark {
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.ai-input .chat-marquee {
+  mask-image: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ai-input .chat-marquee::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-input .chat-marquee > ul {
+  gap: 0.55rem;
+  animation: none !important;
+}
+
+.ai-input .chat-marquee > ul > li {
+  border: 1px solid #2b2b2b;
+  border-radius: 999px;
+  background: #101010;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.72rem;
+  animation: prompt-slide-in 0.42s ease both;
+}
+
+.ai-input .chat-marquee > ul > li:nth-child(2) {
+  animation-delay: 40ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(3) {
+  animation-delay: 80ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(4) {
+  animation-delay: 120ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(5) {
+  animation-delay: 160ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(6) {
+  animation-delay: 200ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(7) {
+  animation-delay: 240ms;
+}
+.ai-input .chat-marquee > ul > li:nth-child(8) {
+  animation-delay: 280ms;
+}
+
+@keyframes prompt-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.scroll-latest {
+  position: absolute;
+  right: 1rem;
+  bottom: 8.2rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #2c2c2c;
+  border-radius: 999px;
+  background: #111;
+  color: var(--foreground);
+  padding: 0.48rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.scroll-latest.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .scroll-latest {
+    right: 0.75rem;
+    bottom: 8.8rem;
   }
 }
