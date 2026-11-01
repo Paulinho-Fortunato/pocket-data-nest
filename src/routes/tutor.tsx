@@ -6,7 +6,7 @@ import { AIInput } from "@/components/AIInput";
 import { MessageContent } from "@/components/MessageContent";
 import { PageHeader, pageHead } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { askAIStream } from "@/lib/ai";
+import { askAIStream, friendlyAIError } from "@/lib/ai";
 import {
   contextBlock,
   isAllowedFile,
@@ -15,7 +15,7 @@ import {
   parseYouTubeUrl,
   youtubeThumb,
 } from "@/lib/extract";
-import { usePersistentDB, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
+import { usePersistentDB, readStore, writeStore, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
 import { getYouTubeTranscript } from "@/lib/transcript";
 
 export const Route = createFileRoute("/tutor")({
@@ -254,8 +254,8 @@ function Tutor() {
 
     setLoading(true);
     try {
-      const key = localStorage.getItem("angostudy:openrouter_key");
-      const model = localStorage.getItem("angostudy:openrouter_model") || "openrouter/free";
+      const key = readStore<string>("openrouter_key", "").trim();
+      const model = readStore<string>("openrouter_model", "openrouter/auto");
       if (!key) {
         setNoKey(true);
         toast.error("Falta a chave OpenRouter.");
@@ -304,9 +304,8 @@ Explicação:\n${lastMsg.content}`;
         known: false,
       })) as Card[];
 
-      const existingCards = localStorage.getItem("angostudy:cards");
-      const allCards = existingCards ? JSON.parse(existingCards) : [];
-      localStorage.setItem("angostudy:cards", JSON.stringify([...allCards, ...cards]));
+      const allCards = readStore<Card[]>("cards", []);
+      writeStore("cards", [...allCards, ...cards]);
 
       toast.success(`${cards.length} flashcards criados e adicionados ao teu deck!`);
     } catch (e) {
@@ -367,13 +366,18 @@ Explicação:\n${lastMsg.content}`;
         appendAssistantDelta("\n\n*(resposta interrompida)*");
         return;
       }
-      const isKey = e instanceof Error && e.message === "NO_KEY";
+      const rawMessage = e instanceof Error ? e.message : "";
+      const isKey = rawMessage === "NO_KEY";
       setNoKey(isKey);
-      appendAssistantDelta(
-        isKey
-          ? "\n\nPara eu responder, adiciona a tua chave OpenRouter nas Definições."
-          : "\n\nNão consegui ligar ao tutor agora. Verifica a ligação e a chave.",
-      );
+      if (isKey) {
+        appendAssistantDelta(
+          "\n\nPara eu responder, adiciona a tua chave OpenRouter nas Definições.",
+        );
+      } else {
+        const reason = friendlyAIError(rawMessage || "Erro desconhecido");
+        appendAssistantDelta(`\n\n⚠️ ${reason}`);
+        toast.error(reason);
+      }
     } finally {
       setLoading(false);
       abortRef.current = null;

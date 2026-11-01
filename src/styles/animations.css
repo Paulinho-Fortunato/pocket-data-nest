@@ -26,54 +26,178 @@
   animation: typing-dot 1.2s ease-in-out infinite;
 }
 
-/* Solid pill navigation */
-.menu {
-  width: calc(100% - 1rem);
-  max-width: 32.5rem;
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.375rem;
-  border: 1px solid var(--color-border);
-  border-radius: 9999px;
-  background: var(--color-card);
-  box-shadow: 0 8px 24px oklch(0 0 0 / 0.28);
+/* ── Bottom navigation estilo app nativo (Android) — dark + dourado ── */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: stretch;
+  gap: 2px;
+  border-top: 1px solid var(--nav-border);
+  background: color-mix(in oklch, var(--card) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  padding-top: 4px;
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px oklch(0 0 0 / 0.45);
 }
 
-.menu a {
+/* fio dourado deslizante no topo da barra */
+.tabbar::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--primary) 70%, transparent),
+    transparent
+  );
+  background-size: 220% 100%;
+  animation: nav-line-flow 9s linear infinite;
+  pointer-events: none;
+}
+
+.tabbar a {
+  position: relative;
   display: flex;
-  min-width: 0;
-  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  border-radius: 9999px;
-  padding: 0.5rem 0.25rem;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 6px 2px 8px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--color-muted-foreground);
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
-  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  user-select: none;
+  transition:
+    color 180ms ease,
+    transform 120ms ease;
 }
 
-.menu a:hover,
-.menu a[data-status="active"] {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
-}
-
-.menu a:active {
-  transform: scale(0.96);
-}
-
-.menu a svg {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-
-.menu a span {
-  font-size: 0.625rem;
+/* o separador "Mais" é um <button> — mesmo visual dos links */
+.tabbar button {
+  position: relative;
+  appearance: none;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 6px 2px 8px;
+  font-size: 0.6rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-muted-foreground);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition:
+    color 180ms ease,
+    transform 120ms ease;
+}
+
+.tabbar a:active,
+.tabbar button:active {
+  transform: scale(0.93);
+}
+
+/* "pílula" que enche por baixo do ícone ao selecionar */
+.tabbar a::before,
+.tabbar button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3.4rem;
+  height: 100%;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--primary) 16%, transparent);
+  opacity: 0;
+  transform: translate(-50%, 55%) scaleX(0.55);
+  transition:
+    transform 260ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    opacity 200ms ease;
+  pointer-events: none;
+}
+
+.tabbar a svg,
+.tabbar button svg {
+  position: relative;
+  z-index: 1;
+  width: 1.3rem;
+  height: 1.3rem;
+  transition: transform 260ms cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.tabbar a span,
+.tabbar button span {
+  position: relative;
+  z-index: 1;
   line-height: 1;
+}
+
+.tabbar a[data-status="active"],
+.tabbar button[data-status="active"] {
+  color: var(--primary);
+}
+
+.tabbar a[data-status="active"]::before,
+.tabbar button[data-status="active"]::before {
+  opacity: 1;
+  transform: translate(-50%, 0) scaleX(1);
+}
+
+.tabbar a[data-status="active"] svg,
+.tabbar button[data-status="active"] svg {
+  transform: translateY(-1px) scale(1.06);
+}
+
+/* ondinha ao tocar (ripple) */
+@keyframes tab-ripple {
+  from {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.tabbar a .tab-ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--primary) 28%, transparent);
+  transform: translate(-50%, -50%) scale(0);
+  animation: tab-ripple 500ms ease-out forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar::before {
+    animation: none;
+  }
 }
 
 /* Voice orb */
