@@ -194,6 +194,43 @@
     font-family: var(--font-display);
     letter-spacing: -0.03em;
   }
+
+  textarea,
+  select {
+    border-color: color-mix(in oklch, var(--color-foreground) 12%, transparent);
+    background-color: oklch(1 0 0 / 0.035);
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  textarea:focus-visible,
+  select:focus-visible {
+    border-color: color-mix(in oklch, var(--primary) 60%, transparent);
+    outline: 2px solid color-mix(in oklch, var(--primary) 15%, transparent);
+    outline-offset: 1px;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid color-mix(in oklch, var(--primary) 75%, transparent);
+    outline-offset: 3px;
+  }
+
+  table {
+    border-color: color-mix(in oklch, var(--color-foreground) 11%, transparent);
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .panel,
+  .topbar,
+  .tabbar,
+  .more-sheet,
+  .ai-input .chat-container,
+  .tutor-message-assistant {
+    background: var(--color-card);
+  }
 }
 
 @utility panel {
