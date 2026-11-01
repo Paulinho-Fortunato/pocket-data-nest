@@ -31,6 +31,7 @@ import {
   youtubeThumb,
 } from "@/lib/extract";
 import { usePersistentDB, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
+import { getYouTubeTranscript } from "@/lib/transcript";
 
 export const Route = createFileRoute("/tutor")({
   head: () => pageHead("Tutor IA", "Um tutor que explica, questiona e ajuda-te a pensar."),
@@ -194,10 +195,9 @@ function Tutor() {
       return;
     }
     try {
-      const response = await fetch(`/api/youtube-transcript?v=${video.id}`);
-      const data = (await response.json()) as { text?: string; error?: string };
-      if (!response.ok || !data.text) {
-        toast.error(data.error ?? "Não foi possível obter a transcrição deste vídeo.");
+      const data = await getYouTubeTranscript({ data: video.id });
+      if (!data.text) {
+        toast.error("O vídeo não tem legendas em português ou inglês.");
         return;
       }
       setAttachment({
