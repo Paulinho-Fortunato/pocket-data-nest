@@ -60,6 +60,9 @@ export function usePersistent<T>(key: string, fallback: T) {
   return [value, update, ready] as const;
 }
 
+/** Alias kept for compatibility with code that refers to the store as a local "DB". */
+export const usePersistentDB = usePersistent;
+
 export type Card = { id: string; q: string; a: string; deck: string; known: boolean };
 export type Note = { id: string; title: string; body: string; updated: number };
 export type ChatMsg = { role: "user" | "assistant"; content: string };
