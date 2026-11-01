@@ -131,7 +131,7 @@ function Definicoes() {
       </section>
 
       <section className="panel space-y-4 p-5">
-        <h2 className="font-semibold">Tutor IA (OpenRouter)</h2>
+        <h2 className="font-semibold">Agente IA (OpenRouter)</h2>
         <div className="space-y-1.5">
           <Label htmlFor="k">Chave OpenRouter</Label>
           <Input
@@ -230,4 +230,3 @@ function Definicoes() {
     </div>
   );
 }
-

@@ -17,7 +17,7 @@ export const Route = createFileRoute("/")({
 });
 
 const tools = [
-  { to: "/tutor", icon: Bot, title: "Tutor IA", text: "Explica qualquer conceito ao teu ritmo." },
+  { to: "/tutor", icon: Bot, title: "Agente IA", text: "Organiza pedidos e explica qualquer conceito." },
   {
     to: "/flashcards",
     icon: Layers,

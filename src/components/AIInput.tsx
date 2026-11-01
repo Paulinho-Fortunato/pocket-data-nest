@@ -156,22 +156,27 @@ export function AIInput({
       />
 
       {suggestions.length > 0 && (
-        <div className="chat-marquee" aria-hidden="true">
-          {[0, 1].map((copy) => (
-            <ul key={copy}>
-              {suggestions.map((s) => (
-                <li
-                  key={`${copy}-${s}`}
-                  onClick={() => {
-                    onChange(s.endsWith(" ") || s.endsWith(":") ? s : `${s} `);
-                    taRef.current?.focus();
-                  }}
-                >
-                  {s}
-                </li>
-              ))}
-            </ul>
-          ))}
+        <div className="chat-marquee" aria-label="Sugestões rápidas">
+          <ul>
+            {suggestions.map((s) => (
+              <li
+                key={s}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  const prompt = s.endsWith(" ") || s.endsWith(":") ? s : `${s} `;
+                  onPickSuggestion?.(prompt);
+                  onChange(prompt);
+                  taRef.current?.focus();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") event.currentTarget.click();
+                }}
+              >
+                {s}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

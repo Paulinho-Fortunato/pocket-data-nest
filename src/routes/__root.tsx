@@ -87,10 +87,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Tutor IA, flashcards, quizzes, pomodoro e notas — tudo guardado no teu dispositivo.",
+          "Agente IA, flashcards, quizzes, pomodoro e notas — tudo guardado no teu dispositivo.",
       },
-      /* dark + dourado apenas — sem cores extra */
-      { name: "theme-color", content: "#141208" },
+      /* tema preto sólido com acento azul */
+      { name: "theme-color", content: "#050505" },
       { name: "color-scheme", content: "dark" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },

@@ -19,7 +19,7 @@ import { levelOf, streak, useStats } from "@/lib/store";
 
 const nav = [
   { to: "/", label: "Início", short: "Início", icon: Home },
-  { to: "/tutor", label: "Tutor IA", short: "Tutor", icon: Bot },
+  { to: "/tutor", label: "Agente IA", short: "Agente", icon: Bot },
   { to: "/flashcards", label: "Flashcards", short: "Cartões", icon: Layers },
   { to: "/quiz", label: "Quiz", short: "Quiz", icon: ListChecks },
   { to: "/foco", label: "Modo foco", short: "Foco", icon: Timer },

@@ -15,11 +15,19 @@ import {
   parseYouTubeUrl,
   youtubeThumb,
 } from "@/lib/extract";
-import { usePersistentDB, readStore, writeStore, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
+import {
+  usePersistentDB,
+  readStore,
+  writeStore,
+  useStats,
+  type ChatMsg,
+  type Card,
+  uid,
+} from "@/lib/store";
 import { getYouTubeTranscript } from "@/lib/transcript";
 
 export const Route = createFileRoute("/tutor")({
-  head: () => pageHead("Tutor IA", "Um tutor que explica, questiona e ajuda-te a pensar."),
+  head: () => pageHead("Agente IA", "Um agente que compreende contexto e transforma pedidos em respostas úteis."),
   component: Tutor,
 });
 
@@ -230,16 +238,11 @@ function Tutor() {
 
   function exportConversa() {
     const content = msgs
-      .map(
-        (m) =>
-          `**${m.role === "user" ? "Tu" : "Tutor"}:**\n\n${m.content}\n\n---\n\n`,
-      )
+      .map((m) => `**${m.role === "user" ? "Tu" : "Agente"}:**\n\n${m.content}\n\n---\n\n`)
       .join("");
 
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(
-      new Blob([content], { type: "text/markdown; charset=utf-8" }),
-    );
+    a.href = URL.createObjectURL(new Blob([content], { type: "text/markdown; charset=utf-8" }));
     a.download = `conversa-${new Date().toISOString().slice(0, 10)}.md`;
     a.click();
     toast.success("Conversa exportada como Markdown.");
@@ -386,7 +389,10 @@ Explicação:\n${lastMsg.content}`;
 
   return (
     <div className="min-w-0">
-      <PageHeader title="Tutor IA" subtitle="Explicações com texto, fórmulas, ficheiros, PDF, vídeos e voz.">
+      <PageHeader
+        title="Agente IA"
+        subtitle="Pensa contigo, organiza contexto e transforma pedidos em respostas úteis."
+      >
         <Button variant="outline" size="sm" onClick={() => setMsgs([welcome])}>
           <Trash2 /> Limpar
         </Button>
@@ -496,12 +502,7 @@ Explicação:\n${lastMsg.content}`;
             <Youtube className="size-3.5 text-primary" />
           </div>
           <div className="ml-auto flex gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportConversa}
-              className="text-xs"
-            >
+            <Button variant="outline" size="sm" onClick={exportConversa} className="text-xs">
               <Download className="size-3.5 mr-1" />
               Exportar conversa
             </Button>

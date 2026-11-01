@@ -76,29 +76,29 @@
 
   /* neutros escuros */
   --background: oklch(0.13 0.012 80);
-  --foreground: oklch(0.93 0.014 85);
-  --card: oklch(0.175 0.014 80);
-  --card-foreground: oklch(0.93 0.014 85);
-  --popover: oklch(0.185 0.015 80);
-  --popover-foreground: oklch(0.93 0.014 85);
-  --secondary: oklch(0.225 0.016 78);
-  --secondary-foreground: oklch(0.93 0.014 85);
-  --muted: oklch(0.215 0.015 78);
-  --muted-foreground: oklch(0.68 0.02 82);
-  --border: oklch(0.275 0.02 78);
-  --input: oklch(0.275 0.02 78);
+  --foreground: oklch(0.94 0.01 250);
+  --card: oklch(0.155 0.01 250);
+  --card-foreground: oklch(0.94 0.01 250);
+  --popover: oklch(0.12 0.01 250);
+  --popover-foreground: oklch(0.94 0.01 250);
+  --secondary: oklch(0.2 0.012 250);
+  --secondary-foreground: oklch(0.94 0.01 250);
+  --muted: oklch(0.19 0.01 250);
+  --muted-foreground: oklch(0.68 0.015 250);
+  --border: oklch(0.28 0.015 250);
+  --input: oklch(0.28 0.015 250);
 
   /* dourado — a única cor de marca */
-  --primary: oklch(0.79 0.135 85);
-  --primary-foreground: oklch(0.18 0.03 85);
-  --accent: oklch(0.79 0.135 85);
-  --accent-foreground: oklch(0.18 0.03 85);
-  --ring: oklch(0.79 0.135 85);
-  --warning: oklch(0.82 0.14 86);
-  --success: oklch(0.79 0.135 85);
+  --primary: oklch(0.76 0.16 225);
+  --primary-foreground: oklch(0.12 0.02 240);
+  --accent: oklch(0.76 0.16 225);
+  --accent-foreground: oklch(0.12 0.02 240);
+  --ring: oklch(0.76 0.16 225);
+  --warning: oklch(0.82 0.12 225);
+  --success: oklch(0.76 0.16 225);
 
   /* tom quente muito suave para blocos de código e chips */
-  --warm-dim: oklch(0.245 0.022 82);
+  --warm-dim: oklch(0.12 0.012 250);
 
   --destructive: oklch(0.63 0.19 22);
   --destructive-foreground: oklch(0.97 0.01 60);
@@ -118,29 +118,16 @@
   --sidebar-border: oklch(0.275 0.02 78);
   --sidebar-ring: oklch(0.79 0.135 85);
 
-  --gradient-brand: linear-gradient(
-    118deg,
-    oklch(0.88 0.12 95),
-    oklch(0.79 0.135 85) 45%,
-    oklch(0.66 0.115 77)
-  );
-  --gradient-panel: linear-gradient(
-    150deg,
-    oklch(0.195 0.016 80 / 0.94),
-    oklch(0.16 0.012 80 / 0.94)
-  );
-  --gradient-page:
-    radial-gradient(38rem 24rem at 92% 4%, oklch(0.74 0.12 285 / 0.13) 0, transparent 68%),
-    radial-gradient(34rem 26rem at -8% 82%, oklch(0.72 0.1 205 / 0.1) 0, transparent 65%),
-    radial-gradient(58rem 30rem at 85% -12%, oklch(0.79 0.135 85 / 0.08) 0, transparent 60%),
-    var(--background);
-  --shadow-panel: 0 22px 60px oklch(0 0 0 / 0.42), 0 0 0 1px oklch(1 0 0 / 0.025);
-  --shadow-glow: 0 10px 30px oklch(0.79 0.135 85 / 0.22);
+  --gradient-brand: var(--primary);
+  --gradient-panel: var(--card);
+  --gradient-page: var(--background);
+  --shadow-panel: 0 18px 40px oklch(0 0 0 / 0.38);
+  --shadow-glow: 0 8px 24px oklch(0.76 0.16 225 / 0.18);
 
   /* tokens da barra de navegação (dourado sobre preto) */
   --nav-bg: color-mix(in oklch, var(--card) 72%, transparent);
-  --nav-border: color-mix(in oklch, var(--primary) 16%, transparent);
-  --nav-highlight: color-mix(in oklch, oklch(0.9 0.05 90) 14%, transparent);
+  --nav-border: oklch(0.28 0.015 250);
+  --nav-highlight: oklch(0.76 0.16 225 / 0.14);
 
   color-scheme: dark;
 }
@@ -236,9 +223,7 @@
 @utility panel {
   position: relative;
   border: 1px solid color-mix(in oklch, var(--color-foreground) 13%, transparent);
-  background:
-    linear-gradient(135deg, oklch(1 0 0 / 0.065), transparent 36%),
-    var(--gradient-panel);
+  background: linear-gradient(135deg, oklch(1 0 0 / 0.065), transparent 36%), var(--gradient-panel);
   border-radius: calc(var(--radius) + 4px);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(20px) saturate(135%);
@@ -1056,12 +1041,7 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(
-      115deg,
-      transparent 35%,
-      oklch(1 0 0 / 0.35) 50%,
-      transparent 65%
-    );
+    background: linear-gradient(115deg, transparent 35%, oklch(1 0 0 / 0.35) 50%, transparent 65%);
     transform: translateX(-120%);
     animation: send-shine 3.4s ease-in-out infinite;
     pointer-events: none;
@@ -1265,9 +1245,7 @@
   .message-content .katex {
     font-size: 1.04em;
   }
-
 }
-
 
 @media (max-width: 640px) {
   .message-content {
@@ -1276,6 +1254,86 @@
   }
 
   .message-content .katex {
-    font-size: 0.95em;
+    font-size: 0.95rem;
+  }
+}
+
+/* ── Modo sólido: sem vidro, sem movimento contínuo ─────────────────── */
+.app-frame,
+body {
+  background: #050505;
+}
+
+.panel,
+.topbar,
+.tabbar,
+.more-sheet,
+.ai-input .chat-container,
+.ai-input .appendix-bar,
+.tutor-message-assistant,
+.stat-chip,
+.avatar-chip {
+  background: #0b0b0b !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.panel,
+.tutor-message-assistant,
+.tutor-message-user,
+.topbar,
+.tabbar,
+.more-sheet {
+  border-color: #242424 !important;
+}
+
+.topbar-beam,
+.nav-particles,
+.topbar::after,
+.topbar-logo::after,
+.tabbar::before,
+.ai-input .chat-container::before,
+.ai-input .send-orb::after {
+  display: none !important;
+  animation: none !important;
+}
+
+.chat-marquee > ul {
+  animation: none !important;
+}
+
+.tabbar,
+.tabbar a,
+.tabbar button,
+.tabbar a::before,
+.tabbar button::before,
+.tabbar a svg,
+.tabbar button svg {
+  transition: none !important;
+  transform: none !important;
+}
+
+.tabbar a:active,
+.tabbar button:active {
+  transform: none !important;
+}
+
+.more-sheet {
+  animation: none !important;
+}
+
+.tab-ripple {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -5,6 +5,17 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 
+function normalizeMath(content: string) {
+  return content
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `$$\n${math.trim()}\n$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math.trim()}$`)
+    .replace(
+      /(^|[^$])\\begin\{equation\*?\}([\s\S]*?)\\end\{equation\*?\}/g,
+      (_, prefix: string, math: string) => `${prefix}$$\n${math.trim()}\n$$`,
+    )
+    .replace(/(^|\n)\s*\\frac/g, "$1\\frac");
+}
+
 export function MessageContent({ content }: { content: string }) {
   return (
     <div className="message-content">
@@ -30,7 +41,7 @@ export function MessageContent({ content }: { content: string }) {
           ),
         }}
       >
-        {content}
+        {normalizeMath(content)}
       </ReactMarkdown>
     </div>
   );
