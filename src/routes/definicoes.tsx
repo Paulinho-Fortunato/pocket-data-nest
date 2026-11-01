@@ -79,9 +79,12 @@ function Definicoes() {
       if (k.startsWith("angostudy:") && k !== "angostudy:openrouter_key")
         data[k] = localStorage.getItem(k);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    a.href = URL.createObjectURL(
+      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+    );
     a.download = `angostudy-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+    toast.success("Dados exportados. A chave OpenRouter não foi incluída.");
   }
 
   async function restore(f?: File) {
@@ -99,7 +102,8 @@ function Definicoes() {
   }
 
   function wipe() {
-    if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta ação é irreversível.")) return;
+    if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta ação é irreversível."))
+      return;
     Object.keys(localStorage)
       .filter((k) => k.startsWith("angostudy:"))
       .forEach((k) => localStorage.removeItem(k));
@@ -142,7 +146,16 @@ function Definicoes() {
             onChange={(e) => setKey(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Cria uma chave gratuita em <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai</a>. Nunca sai deste dispositivo exceto para o modelo que selecionares.
+            Cria uma chave gratuita em{" "}
+            <a
+              href="https://openrouter.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              openrouter.ai
+            </a>
+            . Nunca sai deste dispositivo exceto para o modelo que selecionares.
           </p>
         </div>
 
@@ -172,8 +185,7 @@ function Definicoes() {
         >
           {testingConnection ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              A testar ligação...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />A testar ligação...
             </>
           ) : (
             "Testar ligação"
@@ -197,7 +209,8 @@ function Definicoes() {
         {savedModel && savedModel !== model && (
           <div className="flex items-center gap-2 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Mudaste de modelo mas ainda não guardaste. Clica em «Guardar definições» para o tutor usar este modelo.
+            Mudaste de modelo mas ainda não guardaste. Clica em «Guardar definições» para o tutor
+            usar este modelo.
           </div>
         )}
       </section>
@@ -210,7 +223,7 @@ function Definicoes() {
         <h2 className="font-semibold">Os teus dados</h2>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={backup}>
-            <Download /> Exportar cópia
+            <Download /> Exportar dados
           </Button>
           <Button variant="outline" onClick={() => fileRef.current?.click()}>
             <Upload /> Importar cópia

@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { FileText, Sparkles, Trash2, X, Youtube, Download, Plus } from "lucide-react";
+import {
+  Copy,
+  Download,
+  FileJson,
+  FileText,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+  Youtube,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AIInput } from "@/components/AIInput";
 import { MessageContent } from "@/components/MessageContent";
@@ -27,7 +37,11 @@ import {
 import { getYouTubeTranscript } from "@/lib/transcript";
 
 export const Route = createFileRoute("/tutor")({
-  head: () => pageHead("Agente IA", "Um agente que compreende contexto e transforma pedidos em respostas úteis."),
+  head: () =>
+    pageHead(
+      "Agente IA",
+      "Um agente que compreende contexto e transforma pedidos em respostas úteis.",
+    ),
   component: Tutor,
 });
 
@@ -236,16 +250,47 @@ function Tutor() {
     abortRef.current?.abort();
   }
 
-  function exportConversa() {
-    const content = msgs
+  function conversationMarkdown() {
+    return msgs
       .map((m) => `**${m.role === "user" ? "Tu" : "Agente"}:**\n\n${m.content}\n\n---\n\n`)
       .join("");
+  }
 
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([content], { type: "text/markdown; charset=utf-8" }));
-    a.download = `conversa-${new Date().toISOString().slice(0, 10)}.md`;
-    a.click();
-    toast.success("Conversa exportada como Markdown.");
+  function downloadConversation(format: "md" | "json") {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const isJson = format === "json";
+    const payload = isJson
+      ? JSON.stringify(
+          {
+            app: "AngoStudy",
+            type: "agent-conversation",
+            exportedAt: new Date().toISOString(),
+            messages: msgs,
+          },
+          null,
+          2,
+        )
+      : conversationMarkdown();
+    const url = URL.createObjectURL(
+      new Blob([payload], {
+        type: isJson ? "application/json" : "text/markdown; charset=utf-8",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `angostudy-conversa-${stamp}.${format}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Histórico exportado como ${isJson ? "JSON" : "Markdown"}.`);
+  }
+
+  async function copyConversation() {
+    try {
+      await navigator.clipboard.writeText(conversationMarkdown());
+      toast.success("Histórico copiado para a área de transferência.");
+    } catch {
+      toast.error("Não foi possível copiar o histórico neste navegador.");
+    }
   }
 
   async function createFlashcardsFromLast() {
@@ -502,9 +547,24 @@ Explicação:\n${lastMsg.content}`;
             <Youtube className="size-3.5 text-primary" />
           </div>
           <div className="ml-auto flex gap-1.5">
-            <Button variant="outline" size="sm" onClick={exportConversa} className="text-xs">
-              <Download className="size-3.5 mr-1" />
-              Exportar conversa
+            <Button variant="outline" size="sm" onClick={copyConversation} className="text-xs">
+              <Copy className="mr-1 size-3.5" /> Copiar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadConversation("md")}
+              className="text-xs"
+            >
+              <Download className="mr-1 size-3.5" /> Markdown
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadConversation("json")}
+              className="text-xs"
+            >
+              <FileJson className="mr-1 size-3.5" /> JSON
             </Button>
             <Button
               variant="outline"
