@@ -39,12 +39,14 @@
   align-items: stretch;
   gap: 2px;
   border-top: 1px solid var(--nav-border);
-  background: color-mix(in oklch, var(--card) 86%, transparent);
-  backdrop-filter: blur(18px) saturate(160%);
+  background:
+    linear-gradient(120deg, oklch(1 0 0 / 0.06), transparent 42%),
+    color-mix(in oklch, var(--card) 72%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
-  padding-top: 4px;
-  padding-bottom: max(4px, env(safe-area-inset-bottom));
-  box-shadow: 0 -8px 30px oklch(0 0 0 / 0.45);
+  padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 42px oklch(0 0 0 / 0.48), 0 -1px 0 oklch(1 0 0 / 0.04);
+  contain: layout paint;
 }
 
 /* fio dourado deslizante no topo da barra */

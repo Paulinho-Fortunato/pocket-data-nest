@@ -391,8 +391,8 @@ Explicação:\n${lastMsg.content}`;
           <Trash2 /> Limpar
         </Button>
       </PageHeader>
-      <div className="panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5">
+      <div className="panel tutor-panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
+        <div className="tutor-messages min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5">
           {msgs.map((m, i) => (
             <div
               key={`${i}-${m.role}`}
@@ -410,8 +410,8 @@ Explicação:\n${lastMsg.content}`;
                 {m.role === "user" ? "EU" : "IA"}
               </span>
               <div
-                className={`min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${
-                  m.role === "user" ? "bg-accent/20" : "bg-secondary/60"
+                className={`tutor-message-bubble min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${
+                  m.role === "user" ? "tutor-message-user" : "tutor-message-assistant"
                 }`}
               >
                 {m.role === "assistant" ? (
@@ -444,7 +444,7 @@ Explicação:\n${lastMsg.content}`;
           )}
           <div ref={endRef} />
         </div>
-        <div className="shrink-0 border-t border-border/60 p-2.5 sm:p-3">
+        <div className="tutor-composer shrink-0 border-t border-border/60 p-2.5 sm:p-3">
           {attachment && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
               {attachment.kind === "youtube" && attachment.thumb ? (

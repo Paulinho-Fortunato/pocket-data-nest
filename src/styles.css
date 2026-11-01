@@ -130,10 +130,11 @@
     oklch(0.16 0.012 80 / 0.94)
   );
   --gradient-page:
-    radial-gradient(58rem 30rem at 85% -12%, oklch(0.79 0.135 85 / 0.07) 0, transparent 60%),
-    radial-gradient(40rem 26rem at 4% 106%, oklch(0.79 0.135 85 / 0.05) 0, transparent 60%),
+    radial-gradient(38rem 24rem at 92% 4%, oklch(0.74 0.12 285 / 0.13) 0, transparent 68%),
+    radial-gradient(34rem 26rem at -8% 82%, oklch(0.72 0.1 205 / 0.1) 0, transparent 65%),
+    radial-gradient(58rem 30rem at 85% -12%, oklch(0.79 0.135 85 / 0.08) 0, transparent 60%),
     var(--background);
-  --shadow-panel: 0 18px 50px oklch(0 0 0 / 0.4);
+  --shadow-panel: 0 22px 60px oklch(0 0 0 / 0.42), 0 0 0 1px oklch(1 0 0 / 0.025);
   --shadow-glow: 0 10px 30px oklch(0.79 0.135 85 / 0.22);
 
   /* tokens da barra de navegação (dourado sobre preto) */
@@ -196,10 +197,15 @@
 }
 
 @utility panel {
-  border: 1px solid var(--color-border);
-  background: var(--gradient-panel);
+  position: relative;
+  border: 1px solid color-mix(in oklch, var(--color-foreground) 13%, transparent);
+  background:
+    linear-gradient(135deg, oklch(1 0 0 / 0.065), transparent 36%),
+    var(--gradient-panel);
   border-radius: calc(var(--radius) + 4px);
   box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
 }
 
 @utility bg-brand {
@@ -232,6 +238,40 @@
     overflow-wrap: anywhere;
   }
 
+  .tutor-panel {
+    isolation: isolate;
+    background:
+      radial-gradient(34rem 18rem at 100% 0%, oklch(0.72 0.12 285 / 0.1), transparent 68%),
+      var(--gradient-panel);
+  }
+
+  .tutor-messages {
+    scrollbar-gutter: stable;
+  }
+
+  .tutor-message-bubble {
+    border: 1px solid transparent;
+    box-shadow: 0 10px 25px oklch(0 0 0 / 0.12);
+  }
+
+  .tutor-message-assistant {
+    border-color: color-mix(in oklch, var(--color-foreground) 9%, transparent);
+    background:
+      linear-gradient(135deg, oklch(1 0 0 / 0.055), transparent 46%),
+      color-mix(in oklch, var(--secondary) 62%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .tutor-message-user {
+    border-color: color-mix(in oklch, var(--primary) 22%, transparent);
+    background: linear-gradient(135deg, oklch(0.79 0.135 85 / 0.22), oklch(0.68 0.11 78 / 0.1));
+  }
+
+  .tutor-composer {
+    background: linear-gradient(180deg, oklch(0.12 0.01 260 / 0.1), transparent);
+  }
+
   /* ── Barra superior compacta estilo app — dourado sobre preto ───── */
   .topbar {
     position: sticky;
@@ -245,7 +285,9 @@
     margin-inline: -1rem;
     padding-inline: 1rem;
     border-bottom: 1px solid var(--nav-border);
-    background: color-mix(in oklch, var(--background) 82%, transparent);
+    background:
+      linear-gradient(100deg, oklch(1 0 0 / 0.045), transparent 40%),
+      color-mix(in oklch, var(--background) 74%, transparent);
     backdrop-filter: blur(16px) saturate(170%);
     -webkit-backdrop-filter: blur(16px) saturate(170%);
     box-shadow: 0 10px 30px oklch(0 0 0 / 0.45);
@@ -401,7 +443,9 @@
     gap: 0.4rem;
     border: 1px solid var(--nav-border);
     border-radius: 9999px;
-    background: color-mix(in oklch, var(--secondary) 55%, transparent);
+    background: color-mix(in oklch, var(--secondary) 46%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     padding: 0.4rem 0.8rem;
     color: var(--color-muted-foreground);
     transition:
@@ -430,7 +474,7 @@
     border: 1px solid transparent;
     border-radius: 9999px;
     background:
-      linear-gradient(var(--card), var(--card)) padding-box,
+      linear-gradient(oklch(0.2 0.02 270 / 0.72), oklch(0.16 0.015 250 / 0.72)) padding-box,
       var(--gradient-brand) border-box;
     color: var(--color-foreground);
     font-size: 0.7rem;
@@ -672,10 +716,11 @@
         color-mix(in oklch, var(--accent-glow) 9%, transparent),
         transparent 55%
       ),
-      var(--primary-color);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid color-mix(in oklch, var(--accent-glow) 26%, var(--color-border));
+      linear-gradient(135deg, oklch(1 0 0 / 0.06), transparent 40%),
+      color-mix(in oklch, var(--primary-color) 88%, transparent);
+    backdrop-filter: blur(22px) saturate(145%);
+    -webkit-backdrop-filter: blur(22px) saturate(145%);
+    border: 1px solid color-mix(in oklch, var(--color-foreground) 16%, transparent);
     border-radius: 1.15rem;
     overflow: hidden;
     box-shadow:
