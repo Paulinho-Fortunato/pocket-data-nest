@@ -1,26 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import {
-  FileText,
-  Mic,
-  MicOff,
-  Paperclip,
-  Send,
-  Sparkles,
-  Square,
-  Trash2,
-  Volume2,
-  VolumeX,
-  X,
-  Youtube,
-  Download,
-  Plus,
-} from "lucide-react";
+import { FileText, Sparkles, Trash2, X, Youtube, Download, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { AIInput } from "@/components/AIInput";
 import { MessageContent } from "@/components/MessageContent";
 import { PageHeader, pageHead } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { askAIStream } from "@/lib/ai";
 import {
   contextBlock,
@@ -31,6 +16,7 @@ import {
   youtubeThumb,
 } from "@/lib/extract";
 import { usePersistentDB, useStats, type ChatMsg, type Card, uid } from "@/lib/store";
+import { getYouTubeTranscript } from "@/lib/transcript";
 
 export const Route = createFileRoute("/tutor")({
   head: () => pageHead("Tutor IA", "Um tutor que explica, questiona e ajuda-te a pensar."),
@@ -111,9 +97,9 @@ function Tutor() {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [listening, setListening] = useState(false);
+  const [searchEnabled, setSearchEnabled] = useState(false);
   const { award, setStats, stats } = useStats();
   const endRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -170,6 +156,20 @@ function Tutor() {
 
   async function readFile(file?: File) {
     if (!file) return;
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachment({
+          name: file.name,
+          text: `[Imagem anexada: ${file.name}] (descreve ao tutor o que queres saber sobre esta imagem.)`,
+          kind: "file",
+        });
+        toast.success("Imagem anexada ao próximo pedido.");
+      };
+      reader.onerror = () => toast.error("Não foi possível ler essa imagem.");
+      reader.readAsDataURL(file);
+      return;
+    }
     if (!isAllowedFile(file)) {
       toast.error("Escolhe um ficheiro de texto, Markdown, código, CSV, JSON ou PDF.");
       return;
@@ -194,10 +194,9 @@ function Tutor() {
       return;
     }
     try {
-      const response = await fetch(`/api/youtube-transcript?v=${video.id}`);
-      const data = (await response.json()) as { text?: string; error?: string };
-      if (!response.ok || !data.text) {
-        toast.error(data.error ?? "Não foi possível obter a transcrição deste vídeo.");
+      const data = await getYouTubeTranscript({ data: video.id });
+      if (!data.text) {
+        toast.error("O vídeo não tem legendas em português ou inglês.");
         return;
       }
       setAttachment({
@@ -342,7 +341,6 @@ Explicação:\n${lastMsg.content}`;
     setMsgs(next);
     setInput("");
     setAttachment(null);
-    if (fileRef.current) fileRef.current.value = "";
     setLoading(true);
     setNoKey(false);
     setStreaming(false);
@@ -465,119 +463,24 @@ Explicação:\n${lastMsg.content}`;
               </button>
             </div>
           )}
-          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-            {presets.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setInput(p)}
-                className="shrink-0 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
-              >
-                {p.replace(/[: ]+$/, "").replace(/ sobre$| para explicar$/, "")}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-end gap-1.5 sm:gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
-              rows={2}
-              className="min-h-12 flex-1 resize-none text-sm sm:min-h-14"
-            />
-            <div className="flex shrink-0 flex-col gap-1.5">
-              <div className="flex gap-1.5">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".txt,.md,.markdown,.csv,.json,.js,.ts,.tsx,.jsx,.py,.html,.css,.pdf,text/*,application/pdf"
-                  hidden
-                  onChange={(e) => readFile(e.target.files?.[0])}
-                />
-                <button
-                  type="button"
-                  className="file-upload-button"
-                  onClick={() => fileRef.current?.click()}
-                  aria-label="Anexar ficheiro ou PDF"
-                >
-                  <svg
-                    aria-hidden="true"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeWidth="2"
-                      stroke="#ffffff"
-                      d="M13.5 3H12H8C6.34315 3 5 4.34315 5 6V18C5 19.6569 6.34315 21 8 21H11M13.5 3L19 8.625M13.5 3V7.625C13.5 8.17728 13.9477 8.625 14.5 8.625H19M19 8.625V11.8125"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                      strokeWidth="2"
-                      stroke="#ffffff"
-                      d="M17 15V18M17 21V18M17 18H14M17 18H20"
-                    />
-                  </svg>
-                  <span>ADD FILE</span>
-                </button>
-                <Button
-                  type="button"
-                  variant={listening ? "default" : "outline"}
-                  size="icon"
-                  onClick={toggleListening}
-                  aria-label={listening ? "Parar ditado" : "Ditar pergunta"}
-                >
-                  {listening ? <MicOff /> : <Mic />}
-                </Button>
-                <Button
-                  type="button"
-                  variant={voiceEnabled ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setVoiceEnabled((value) => !value)}
-                  aria-label={voiceEnabled ? "Desligar voz" : "Ler respostas em voz alta"}
-                >
-                  {voiceEnabled ? <Volume2 /> : <VolumeX />}
-                </Button>
-              </div>
-              {loading ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={stopStreaming}
-                  size="icon"
-                  className="h-11 w-full sm:h-12"
-                  aria-label="Parar resposta"
-                >
-                  <Square />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={send}
-                  disabled={loading || (!input.trim() && !attachment)}
-                  size="icon"
-                  className="h-11 w-full sm:h-12"
-                  aria-label="Enviar"
-                >
-                  <Send />
-                </Button>
-              )}
-            </div>
-          </div>
-          <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
-            Enter envia · Shift + Enter nova linha · PDF, textos e vídeos do YouTube (colar link) até 18 000 caracteres
-          </p>
+          <AIInput
+            value={input}
+            onChange={setInput}
+            onSubmit={send}
+            onAbort={stopStreaming}
+            placeholder="Escreve a tua dúvida ou cola um link do YouTube..."
+            suggestions={[...presets, "Resume este vídeo:", "Cria um plano de estudo para"]}
+            listening={listening}
+            onToggleMic={toggleListening}
+            voiceEnabled={voiceEnabled}
+            onToggleVoice={() => setVoiceEnabled((value) => !value)}
+            searchEnabled={searchEnabled}
+            onToggleSearch={() => setSearchEnabled((value) => !value)}
+            onFile={(file) => readFile(file ?? undefined)}
+            loading={loading}
+            disabled={(!input.trim() && !attachment) || loading}
+            hint="Enter envia · Shift + Enter nova linha · PDF, textos e vídeos do YouTube (colar link) até 18 000 caracteres"
+          />
         </div>
       </div>
 

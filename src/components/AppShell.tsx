@@ -6,18 +6,19 @@ import {
   Bot,
   Flame,
   GraduationCap,
+  Home,
   Layers,
-  LayoutDashboard,
   ListChecks,
   NotebookPen,
   Settings,
   Timer,
   Zap,
 } from "lucide-react";
+import { ToolMenu } from "@/components/ToolMenu";
 import { levelOf, streak, useStats } from "@/lib/store";
 
 const nav = [
-  { to: "/", label: "Início", icon: LayoutDashboard },
+  { to: "/", label: "Início", icon: Home },
   { to: "/tutor", label: "Tutor IA", icon: Bot },
   { to: "/flashcards", label: "Flashcards", icon: Layers },
   { to: "/quiz", label: "Quiz", icon: ListChecks },
