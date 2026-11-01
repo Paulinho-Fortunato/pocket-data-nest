@@ -15,11 +15,11 @@ export const Route = createFileRoute("/definicoes")({
 });
 
 const models = [
-  ["openrouter/free", "OpenRouter Free (automático)"],
-  ["google/gemma-2-9b-it:free", "Gemma 2 9B (Free)"],
   ["meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (Free)"],
-  ["deepseek/deepseek-r1-distill-llama-70b", "DeepSeek R1 70B"],
-  ["openai/gpt-4o-mini", "GPT-4o Mini"],
+  ["google/gemma-2-9b-it:free", "Gemma 2 9B (Free)"],
+  ["deepseek/deepseek-r1-distill-llama-70b:free", "DeepSeek R1 70B (Free)"],
+  ["openrouter/auto", "Automático (o OpenRouter escolhe)"],
+  ["openai/gpt-4o-mini", "GPT-4o Mini (pago)"],
 ];
 
 function Definicoes() {
@@ -27,17 +27,19 @@ function Definicoes() {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(6);
   const [key, setKey] = useState("");
-  const [model, setModel] = useState("openrouter/free");
+  const [model, setModel] = useState("openrouter/auto");
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "error" | null>(null);
   const [testError, setTestError] = useState("");
+  const [savedModel, setSavedModel] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(stats.name);
     setGoal(stats.weeklyGoal);
     setKey(readStore("openrouter_key", ""));
-    setModel(readStore("openrouter_model", "openrouter/free"));
+    setModel(readStore("openrouter_model", "openrouter/auto"));
+    setSavedModel(readStore("openrouter_model", ""));
   }, [stats.name, stats.weeklyGoal]);
 
   async function handleTestConnection() {
@@ -53,6 +55,7 @@ function Definicoes() {
 
     if (result.ok) {
       setTestResult("ok");
+      setSavedModel(model);
       toast.success("Ligação bem-sucedida! Podes começar a usar o tutor.");
     } else {
       setTestResult("error");
@@ -66,6 +69,7 @@ function Definicoes() {
     setStats({ ...stats, name: name.trim() || "Estudante", weeklyGoal: Math.max(1, goal) });
     writeStore("openrouter_key", key.trim());
     writeStore("openrouter_model", model);
+    setSavedModel(model);
     toast.success("Definições guardadas neste dispositivo.");
   }
 
@@ -185,8 +189,15 @@ function Definicoes() {
 
         {testResult === "error" && (
           <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
-            <AlertCircle className="h-4 w-4" />
+            <AlertCircle className="h-4 w-4 shrink-0" />
             Erro: {testError}
+          </div>
+        )}
+
+        {savedModel && savedModel !== model && (
+          <div className="flex items-center gap-2 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            Mudaste de modelo mas ainda não guardaste. Clica em «Guardar definições» para o tutor usar este modelo.
           </div>
         )}
       </section>
