@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -9,32 +9,33 @@ import {
   Home,
   Layers,
   ListChecks,
-  Menu,
+  MoreHorizontal,
   NotebookPen,
   Settings,
   Timer,
-  X,
   Zap,
 } from "lucide-react";
 import { levelOf, streak, useStats } from "@/lib/store";
 
 const nav = [
-  { to: "/", label: "Início", icon: Home },
-  { to: "/tutor", label: "Tutor IA", icon: Bot },
-  { to: "/flashcards", label: "Flashcards", icon: Layers },
-  { to: "/quiz", label: "Quiz", icon: ListChecks },
-  { to: "/foco", label: "Modo foco", icon: Timer },
-  { to: "/notas", label: "Notas", icon: NotebookPen },
-  { to: "/progresso", label: "Progresso", icon: BarChart3 },
-  { to: "/metodos", label: "Métodos", icon: BookOpen },
-  { to: "/definicoes", label: "Definições", icon: Settings },
+  { to: "/", label: "Início", short: "Início", icon: Home },
+  { to: "/tutor", label: "Tutor IA", short: "Tutor", icon: Bot },
+  { to: "/flashcards", label: "Flashcards", short: "Cartões", icon: Layers },
+  { to: "/quiz", label: "Quiz", short: "Quiz", icon: ListChecks },
+  { to: "/foco", label: "Modo foco", short: "Foco", icon: Timer },
+  { to: "/notas", label: "Notas", short: "Notas", icon: NotebookPen },
+  { to: "/progresso", label: "Progresso", short: "Níveis", icon: BarChart3 },
+  { to: "/metodos", label: "Métodos", short: "Métodos", icon: BookOpen },
+  { to: "/definicoes", label: "Definições", short: "Ajustes", icon: Settings },
 ] as const;
 
-const desktopNav = [nav[0], nav[1], nav[2], nav[3], nav[4]];
+/* 4 destinos principais na barra de baixo + "Mais" (estilo app Android) */
+const tabPrimary = [nav[0], nav[1], nav[2], nav[3]];
+const tabOverflow = nav.slice(4);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { stats } = useStats();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const initials = stats.name
     .split(" ")
     .map((w) => w[0])
@@ -42,20 +43,27 @@ export function AppShell({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
 
-  /* fecha o menu mobile ao navegar */
+  /* fecha o sheet "Mais" com Escape */
   useEffect(() => {
-    if (!menuOpen) return;
-    const close = () => setMenuOpen(false);
-    window.addEventListener("hashchange", close);
-    window.addEventListener("popstate", close);
-    return () => {
-      window.removeEventListener("hashchange", close);
-      window.removeEventListener("popstate", close);
-    };
-  }, [menuOpen]);
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
+
+  /* ondinha (ripple) ao tocar num separador — feedback tátil visual */
+  const spawnRipple = useCallback((e: PointerEvent<HTMLElement>) => {
+    const host = e.currentTarget;
+    if (host.querySelector(".tab-ripple")) return;
+    const span = document.createElement("span");
+    span.className = "tab-ripple";
+    span.addEventListener("animationend", () => span.remove());
+    host.appendChild(span);
+  }, []);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-10 md:px-6">
+    <div className="app-frame mx-auto min-h-dvh max-w-7xl px-4 pb-28 md:px-6">
+      {/* ── Top bar compacta estilo app ─────────────────────────────── */}
       <header className="topbar">
         <span className="topbar-beam" aria-hidden="true" />
         <span className="nav-particles" aria-hidden="true">
@@ -76,20 +84,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </Link>
 
-        <nav className="topbar-nav" aria-label="Navegação principal">
-          {desktopNav.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              activeOptions={{ exact: to === "/" }}
-              onClick={() => setMenuOpen(false)}
-            >
-              <Icon />
-              {label}
-            </Link>
-          ))}
-        </nav>
-
         <div className="topbar-stats">
           <span className="stat-chip hidden sm:inline-flex">
             <Flame className="size-3.5 text-warning" />
@@ -102,54 +96,65 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link to="/definicoes" className="avatar-chip" aria-label="Perfil">
             {initials || "AS"}
           </Link>
-          <button
-            type="button"
-            className="icon-btn lg:hidden"
-            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
-          </button>
         </div>
-
-        {menuOpen && (
-          <>
-            <div
-              className="mobile-menu-overlay"
-              aria-hidden="true"
-              onClick={() => setMenuOpen(false)}
-            />
-            <nav className="mobile-menu" aria-label="Navegação">
-              {nav.map(({ to, label, icon: Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  activeOptions={{ exact: to === "/" }}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <Icon />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          </>
-        )}
       </header>
 
-      <div className="grid gap-7 pt-7 md:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="hidden md:block">
-          <nav className="sidebar-nav sticky top-24">
-            {nav.map(({ to, label, icon: Icon }) => (
-              <Link key={to} to={to} activeOptions={{ exact: to === "/" }}>
-                <Icon className="size-4" />
+      {/* ── Conteúdo ────────────────────────────────────────────────── */}
+      <main className="min-w-0 pt-6">{children}</main>
+
+      {/* ── Sheet "Mais" (estilo bottom-sheet do Android) ───────────── */}
+      {moreOpen && (
+        <>
+          <div
+            className="mobile-menu-overlay"
+            aria-hidden="true"
+            onClick={() => setMoreOpen(false)}
+          />
+          <nav className="more-sheet" aria-label="Mais navegação">
+            <span className="more-sheet-handle" aria-hidden="true" />
+            {tabOverflow.map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                activeOptions={{ exact: to === "/" }}
+                className="more-sheet-item"
+                onPointerDown={spawnRipple}
+                onClick={() => setMoreOpen(false)}
+              >
+                <Icon />
                 {label}
               </Link>
             ))}
           </nav>
-        </aside>
-        <main className="min-w-0">{children}</main>
-      </div>
+        </>
+      )}
+
+      {/* ── Bottom navigation fixa (app nativo) ─────────────────────── */}
+      <nav className="tabbar" aria-label="Navegação principal">
+        {tabPrimary.map(({ to, short, icon: Icon }) => (
+          <Link
+            key={to}
+            to={to}
+            activeOptions={{ exact: to === "/" }}
+            onPointerDown={spawnRipple}
+          >
+            <Icon />
+            <span>{short}</span>
+          </Link>
+        ))}
+        <button
+          type="button"
+          className={moreOpen ? "is-active" : ""}
+          data-status={moreOpen ? "active" : undefined}
+          aria-expanded={moreOpen}
+          aria-label="Mais opções"
+          onPointerDown={spawnRipple}
+          onClick={() => setMoreOpen((open) => !open)}
+        >
+          <MoreHorizontal />
+          <span>Mais</span>
+        </button>
+      </nav>
     </div>
   );
 }
