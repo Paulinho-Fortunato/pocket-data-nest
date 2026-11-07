@@ -59,10 +59,15 @@ describe("Responsive and accessibility rules", () => {
   });
 
   it("keeps the tutor composer inside the viewport with the virtual keyboard", () => {
-    expect(styles).toMatch(/\.tutor-panel\s*{[\s\S]*?100svh/);
+    // The immersive shell is height-bound to the viewport, not to a fixed panel.
+    expect(styles).toMatch(
+      /\.app-frame\[data-immersive="true"\]\s*{[\s\S]*?height:\s*calc\(100svh - var\(--shell-tabbar-h\)/,
+    );
     expect(styles).toMatch(/@supports \(height: 100dvh\)/);
-    expect(styles).toContain(".tutor-scroll");
-    expect(styles).toContain(".tutor-composer");
+    expect(styles).toContain(".tutor-app-main");
+    expect(styles).toContain(".tutor-composer-area");
+    expect(styles).toContain('data-keyboard="open"');
+    expect(styles).not.toContain("height: clamp(15rem, calc(100svh");
     // 16px avoids iOS zooming the page when the textarea gets focus
     expect(styles).toMatch(/\.ai-input \.chat-field\s*{[\s\S]*?font-size:\s*1rem/);
   });
@@ -73,9 +78,14 @@ describe("Responsive and accessibility rules", () => {
     expect(styles).not.toContain("chat-marquee");
   });
 
-  it("uses the documented dark + gold identity", () => {
-    expect(styles).toMatch(/--primary:\s*oklch\(0\.79 0\.135 85\)/);
+  it("keeps the dark + gold identity as the default accent", () => {
+    expect(styles).toMatch(/--accent-h:\s*85/);
+    expect(styles).toMatch(/--accent-l:\s*0\.79/);
+    expect(styles).toMatch(/--accent-c:\s*0\.135/);
     expect(styles).toMatch(/--sidebar-primary:\s*oklch\(0\.79 0\.135 85\)/);
+    // Personalization provides light theme and extra accents without losing gold.
+    expect(styles).toContain('html[data-theme="light"]');
+    expect(styles).toContain('html[data-accent="azul"]');
   });
 
   it("exposes navigation state to assistive technology", () => {
