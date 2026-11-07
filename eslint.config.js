@@ -36,5 +36,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    // shadcn/ui files intentionally co-locate `cva` variants, hooks and
+    // sub-components (sidebar, form, toggle...). Fast Refresh still works for
+    // the components themselves, and splitting those files would diverge from
+    // the upstream components. The rule stays on for every other file.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
   eslintPluginPrettier,
 );

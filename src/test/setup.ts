@@ -18,3 +18,20 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// jsdom 20 ships File/Blob without `.text()`. Browsers have had it for years, so
+// the app keeps using the standard API and the test environment gets a shim.
+if (typeof Blob !== "undefined" && typeof Blob.prototype.text !== "function") {
+  Object.defineProperty(Blob.prototype, "text", {
+    configurable: true,
+    writable: true,
+    value: function text(this: Blob) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler o Blob."));
+        reader.readAsText(this);
+      });
+    },
+  });
+}

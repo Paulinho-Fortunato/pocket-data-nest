@@ -1,11 +1,24 @@
 @keyframes typing-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 @keyframes typing-dot {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-  40% { transform: translateY(-4px); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 .typing-cursor {
@@ -45,7 +58,9 @@
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   padding: 6px 0 max(6px, env(safe-area-inset-bottom));
-  box-shadow: 0 -14px 42px oklch(0 0 0 / 0.48), 0 -1px 0 oklch(1 0 0 / 0.04);
+  box-shadow:
+    0 -14px 42px oklch(0 0 0 / 0.48),
+    0 -1px 0 oklch(1 0 0 / 0.04);
   contain: layout paint;
 }
 
@@ -211,7 +226,10 @@
   border-radius: 9999px;
   background: var(--color-secondary);
   color: var(--color-foreground);
-  transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .voice-orb:hover {
@@ -227,7 +245,9 @@
 }
 
 @keyframes voice-pulse {
-  50% { box-shadow: 0 0 0 6px color-mix(in oklch, var(--color-destructive) 12%, transparent); }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in oklch, var(--color-destructive) 12%, transparent);
+  }
 }
 
 /* ADD FILE button */
@@ -245,7 +265,10 @@
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color 160ms ease, transform 160ms ease, border-color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease,
+    border-color 160ms ease;
 }
 
 .add-file-button:hover {
@@ -272,7 +295,9 @@
   border-radius: 1.1rem;
   background: var(--color-card);
   box-shadow: 0 8px 24px oklch(0 0 0 / 0.2);
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .ai-composer:focus-within {
@@ -281,7 +306,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .typing-cursor, .typing-dot, .voice-orb[data-listening="true"] {
+  .typing-cursor,
+  .typing-dot,
+  .voice-orb[data-listening="true"] {
     animation: none;
   }
 }

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, pageHead } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { useStats } from "@/lib/store";
 

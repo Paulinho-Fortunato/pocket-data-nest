@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Download, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, pageHead } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { defaultCards, uid, usePersistent, useStats, type Card } from "@/lib/store";
+import { uid, useCards, useStats } from "@/lib/store";
 
 export const Route = createFileRoute("/flashcards")({
   head: () => pageHead("Flashcards", "Prática de recuperação para fixar o que realmente importa."),
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/flashcards")({
 });
 
 function Flashcards() {
-  const [cards, setCards] = usePersistent<Card[]>("cards", defaultCards);
+  const [cards, setCards] = useCards();
   const [deck, setDeck] = useState("Todos");
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);

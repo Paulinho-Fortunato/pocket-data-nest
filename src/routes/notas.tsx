@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, pageHead } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { askAI } from "@/lib/ai";
-import { uid, usePersistent, type Note } from "@/lib/store";
+import { uid, useNotes, type Note } from "@/lib/store";
 
 export const Route = createFileRoute("/notas")({
   head: () => pageHead("Notas", "Escreve livremente e transforma notas em clareza."),
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/notas")({
 });
 
 function Notas() {
-  const [notes, setNotes] = usePersistent<Note[]>("notes", []);
+  const [notes, setNotes] = useNotes();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const active = notes.find((n) => n.id === activeId) ?? notes[0];

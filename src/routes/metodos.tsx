@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Brain, CalendarClock, Moon, Shuffle } from "lucide-react";
-import { PageHeader, pageHead } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 
 export const Route = createFileRoute("/metodos")({
   head: () =>

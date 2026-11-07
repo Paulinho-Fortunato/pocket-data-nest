@@ -1,13 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { z } from "zod";
 
-/** All app data is stored in the browser (localStorage) under this prefix. */
-const PREFIX = "angostudy:";
+import {
+  CardSchema,
+  ChatMsgSchema,
+  NoteSchema,
+  StatsSchema,
+  type ParsedCard,
+  type ParsedChatMsg,
+  type ParsedNote,
+  type ParsedStats,
+} from "./schemas";
+
+/**
+ * Small preferences live in localStorage under this prefix. Large documents are
+ * stored in IndexedDB (`lib/idb.ts`) — never here.
+ */
+export const STORAGE_PREFIX = "angostudy:";
 const EVENT = "angostudy-store";
 
 export function readStore<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
-    const raw = localStorage.getItem(PREFIX + key);
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -17,7 +32,7 @@ export function readStore<T>(key: string, fallback: T): T {
 export function writeStore<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(PREFIX + key, JSON.stringify(value));
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
     window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
   } catch {
     // Private browsing and storage quotas can reject writes. The in-memory
@@ -25,17 +40,58 @@ export function writeStore<T>(key: string, value: T) {
   }
 }
 
-/** useState that persists to localStorage and syncs between components/tabs. */
-export function usePersistent<T>(key: string, fallback: T) {
+export function removeStore(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + key);
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Reads a value and validates it with a Zod schema. Corrupted or outdated data
+ * degrades to the fallback instead of crashing the route.
+ */
+export type Validator<T> = z.ZodType<T, z.ZodTypeDef, unknown>;
+
+export function readValidated<T>(
+  key: string,
+  schema: Validator<T>,
+  fallback: T,
+): { value: T; valid: boolean } {
+  const raw = readStore<unknown>(key, undefined as unknown);
+  if (raw === undefined) return { value: fallback, valid: true };
+  const parsed = schema.safeParse(raw);
+  return parsed.success ? { value: parsed.data, valid: true } : { value: fallback, valid: false };
+}
+
+export function writeValidated<T>(key: string, schema: Validator<T>, value: T): boolean {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) return false;
+  writeStore(key, parsed.data);
+  return true;
+}
+
+/** useState that persists to localStorage, validates and syncs across tabs. */
+export function usePersistent<T>(key: string, fallback: T, schema?: Validator<T>) {
   const [value, setValue] = useState<T>(fallback);
   const [ready, setReady] = useState(false);
 
+  const read = useCallback(() => {
+    if (!schema) return readStore(key, fallback);
+    return readValidated(key, schema, fallback).value;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, schema]);
+
   useEffect(() => {
-    setValue(readStore(key, fallback));
+    setValue(read());
     setReady(true);
     const sync = (e: Event) => {
-      const k = e instanceof CustomEvent ? e.detail : (e as StorageEvent).key?.replace(PREFIX, "");
-      if (k === key) setValue(readStore(key, fallback));
+      const k =
+        e instanceof CustomEvent ? e.detail : (e as StorageEvent).key?.replace(STORAGE_PREFIX, "");
+      if (k === key) setValue(read());
     };
     window.addEventListener(EVENT, sync);
     window.addEventListener("storage", sync);
@@ -43,18 +99,21 @@ export function usePersistent<T>(key: string, fallback: T) {
       window.removeEventListener(EVENT, sync);
       window.removeEventListener("storage", sync);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, read]);
 
   const update = useCallback(
     (next: T | ((prev: T) => T)) => {
-      const resolved =
-        typeof next === "function" ? (next as (p: T) => T)(readStore(key, fallback)) : next;
-      writeStore(key, resolved);
+      const resolved = typeof next === "function" ? (next as (p: T) => T)(read()) : next;
+      if (!schema) {
+        writeStore(key, resolved);
+      } else {
+        const parsed = schema.safeParse(resolved);
+        if (!parsed.success) return;
+        writeStore(key, parsed.data);
+      }
       setValue(resolved);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key],
+    [key, read, schema],
   );
 
   return [value, update, ready] as const;
@@ -63,21 +122,10 @@ export function usePersistent<T>(key: string, fallback: T) {
 /** Alias kept for compatibility with code that refers to the store as a local "DB". */
 export const usePersistentDB = usePersistent;
 
-export type Card = { id: string; q: string; a: string; deck: string; known: boolean };
-export type Note = { id: string; title: string; body: string; updated: number };
-export type ChatMsg = { role: "user" | "assistant"; content: string };
-export type Stats = {
-  name: string;
-  xp: number;
-  quizzes: number;
-  correct: number;
-  answered: number;
-  reviewed: number;
-  focusMinutes: number;
-  sessions: number;
-  weeklyGoal: number;
-  days: string[]; // ISO dates with activity
-};
+export type Card = ParsedCard;
+export type Note = ParsedNote;
+export type ChatMsg = ParsedChatMsg;
+export type Stats = ParsedStats;
 
 export const defaultStats: Stats = {
   name: "Estudante",
@@ -117,7 +165,8 @@ export const defaultCards: Card[] = [
   { id: "c4", deck: "Matemática", q: "Qual é o valor de ∫ 2x dx?", a: "x² + C", known: false },
 ];
 
-export const uid = () => Math.random().toString(36).slice(2, 10);
+/** Deterministic-enough id that never collides with the static demo cards. */
+export const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 export const XP_PER_LEVEL = 300;
 export const levelOf = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
@@ -148,7 +197,7 @@ export function streak(days: string[]) {
 
 /** Hook helper to award XP and register activity. */
 export function useStats() {
-  const [stats, setStats, ready] = usePersistent<Stats>("stats", defaultStats);
+  const [stats, setStats, ready] = usePersistent<Stats>("stats", defaultStats, StatsSchema);
   const award = useCallback(
     (xp: number, patch: (s: Stats) => Partial<Stats> = () => ({})) =>
       setStats((s) => {
@@ -162,5 +211,21 @@ export function useStats() {
       }),
     [setStats],
   );
-  return { stats: { ...defaultStats, ...stats }, setStats, award, ready };
+  return useMemo(
+    () => ({ stats: { ...defaultStats, ...stats }, setStats, award, ready }),
+    [stats, setStats, award, ready],
+  );
+}
+
+/** Validated hooks for the other persisted collections. */
+export function useCards() {
+  return usePersistent<Card[]>("cards", defaultCards, CardSchema.array());
+}
+
+export function useNotes() {
+  return usePersistent<Note[]>("notes", [], NoteSchema.array());
+}
+
+export function useChatMessages(fallback: ChatMsg[]) {
+  return usePersistent<ChatMsg[]>("chat", fallback, ChatMsgSchema.array());
 }
