@@ -2,11 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2, Sparkles, Trophy } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, pageHead } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { askAI } from "@/lib/ai";
-import { defaultCards, usePersistent, useStats, type Card } from "@/lib/store";
+import { useCards, useStats, type Card } from "@/lib/store";
 
 export const Route = createFileRoute("/quiz")({
   head: () => pageHead("Quiz", "Testa o teu conhecimento sem medo de errar."),
@@ -66,7 +67,7 @@ function parseAIQuiz(raw: string): Q[] {
 }
 
 function Quiz() {
-  const [cards] = usePersistent<Card[]>("cards", defaultCards);
+  const [cards] = useCards();
   const { award } = useStats();
   const [qs, setQs] = useState<Q[] | null>(null);
   const [i, setI] = useState(0);

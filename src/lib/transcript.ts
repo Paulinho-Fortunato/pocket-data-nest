@@ -27,7 +27,7 @@ async function fetchInLanguages(video: string): Promise<string> {
  * included in the route tree by TanStack Start).
  */
 export const getYouTubeTranscript = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => {
+  .validator((raw: unknown) => {
     const video = typeof raw === "string" ? raw : "";
     if (!/^[\w-]{11}$/.test(video)) {
       throw new Error("ID de vídeo inválido.");

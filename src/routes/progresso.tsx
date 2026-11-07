@@ -1,14 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, pageHead } from "@/components/AppShell";
-import {
-  defaultCards,
-  levelOf,
-  streak,
-  usePersistent,
-  useStats,
-  XP_PER_LEVEL,
-  type Card,
-} from "@/lib/store";
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
+import { levelOf, streak, useCards, useStats, XP_PER_LEVEL } from "@/lib/store";
 
 export const Route = createFileRoute("/progresso")({
   head: () => pageHead("Progresso", "Percebe o que já conquistaste e onde focar a seguir."),
@@ -17,7 +10,7 @@ export const Route = createFileRoute("/progresso")({
 
 function Progresso() {
   const { stats } = useStats();
-  const [cards] = usePersistent<Card[]>("cards", defaultCards);
+  const [cards] = useCards();
   const accuracy = stats.answered ? Math.round((stats.correct / stats.answered) * 100) : 0;
   const weak = cards.filter((c) => !c.known).slice(0, 5);
 

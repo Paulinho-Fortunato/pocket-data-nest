@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardPaste, FileText, Search, X } from "lucide-react";
+import { ClipboardPaste, FileText, X } from "lucide-react";
 
 /* Composer estilo ChatGPT (adaptado de Uiverse.io by AshtonLiou),
    com as cores/interacções do tema AngoStudy. */
@@ -40,18 +40,6 @@ const icons = {
       />
     </svg>
   ),
-  camera: (
-    <svg viewBox="0 0 16 16" fill="currentColor" height="22" width="22" aria-hidden="true">
-      <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4z" />
-      <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5m0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0" />
-    </svg>
-  ),
-  photos: (
-    <svg viewBox="0 0 16 16" fill="currentColor" height="22" width="22" aria-hidden="true">
-      <path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
-      <path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2M14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1M2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z" />
-    </svg>
-  ),
   files: (
     <svg viewBox="0 0 16 16" fill="currentColor" height="22" width="22" aria-hidden="true">
       <path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a2 2 0 0 1 .342-1.31zM2.19 4a1 1 0 0 0-.996 1.09l.637 7a1 1 0 0 0 .995.91h10.348a1 1 0 0 0 .995-.91l.637-7A1 1 0 0 0 13.81 4zm4.69-1.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139q.323-.119.684-.12h5.396z" />
@@ -81,13 +69,17 @@ export type AIInputProps = {
   onToggleMic?: () => void;
   voiceEnabled?: boolean;
   onToggleVoice?: () => void;
-  searchEnabled?: boolean;
-  onToggleSearch?: () => void;
   onFile?: (file: File | undefined) => void;
   loading?: boolean;
   disabled?: boolean;
   hint?: string;
+  /** What the attach picker accepts. Documents only — images are rejected. */
+  fileAccept?: string;
 };
+
+/** Mirrors the extensions supported by `lib/extract.ts`. */
+export const DEFAULT_FILE_ACCEPT =
+  ".pdf,.txt,.md,.markdown,.mdx,.csv,.tsv,.json,.jsonl,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.rb,.go,.rs,.java,.kt,.c,.h,.cpp,.cs,.php,.sh,.bash,.sql,.html,.htm,.css,.scss,.xml,.yml,.yaml,.toml,.ini,.cfg,.tex,.log";
 
 export function AIInput({
   value,
@@ -101,18 +93,14 @@ export function AIInput({
   onToggleMic,
   voiceEnabled = false,
   onToggleVoice,
-  searchEnabled = false,
-  onToggleSearch,
   onFile,
   loading = false,
   disabled = false,
   hint,
+  fileAccept = DEFAULT_FILE_ACCEPT,
 }: AIInputProps) {
   const [appendixOpen, setAppendixOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const photosRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<HTMLInputElement>(null);
 
   /* auto-grow do textarea (substitui a animação de typing do original) */
@@ -123,11 +111,10 @@ export function AIInput({
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [value]);
 
-  function pick(kind: "camera" | "photos" | "files", file?: File) {
+  function pick(file?: File) {
     setAppendixOpen(false);
     onFile?.(file);
-    const el = { camera: cameraRef, photos: photosRef, files: filesRef }[kind].current;
-    if (el) el.value = "";
+    if (filesRef.current) filesRef.current.value = "";
   }
 
   async function pasteFromClipboard() {
@@ -144,26 +131,11 @@ export function AIInput({
   return (
     <div className="ai-input">
       <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(e) => pick("camera", e.target.files?.[0])}
-      />
-      <input
-        ref={photosRef}
-        type="file"
-        accept="image/*"
-        multiple
-        hidden
-        onChange={(e) => pick("photos", e.target.files?.[0])}
-      />
-      <input
         ref={filesRef}
         type="file"
+        accept={fileAccept}
         hidden
-        onChange={(e) => pick("files", e.target.files?.[0])}
+        onChange={(e) => pick(e.target.files?.[0])}
       />
 
       {suggestions.length > 0 && (
@@ -212,28 +184,8 @@ export function AIInput({
           <button
             type="button"
             role="menuitem"
-            data-label="Câmara"
-            aria-label="Tirar foto com a câmara"
-            tabIndex={appendixOpen ? 0 : -1}
-            onClick={() => cameraRef.current?.click()}
-          >
-            {icons.camera}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            data-label="Fotos"
-            aria-label="Escolher fotos"
-            tabIndex={appendixOpen ? 0 : -1}
-            onClick={() => photosRef.current?.click()}
-          >
-            {icons.photos}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            data-label="Ficheiro"
-            aria-label="Anexar ficheiro"
+            data-label="Documento"
+            aria-label="Anexar documento"
             tabIndex={appendixOpen ? 0 : -1}
             onClick={() => filesRef.current?.click()}
           >
@@ -271,7 +223,7 @@ export function AIInput({
                 type="button"
                 className="icon-drop"
                 data-on={appendixOpen || undefined}
-                aria-label="Anexar ficheiro, foto ou PDF"
+                aria-label="Anexar documento (PDF, texto ou código)"
                 aria-expanded={appendixOpen}
                 onClick={() => setAppendixOpen((open) => !open)}
               >
@@ -285,18 +237,6 @@ export function AIInput({
                   <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0z" />
                 </svg>
               </button>
-              {onToggleSearch && (
-                <button
-                  type="button"
-                  className="icon-drop"
-                  data-on={searchEnabled || undefined}
-                  aria-label={searchEnabled ? "Desligar pesquisa web" : "Pesquisar na web"}
-                  aria-pressed={searchEnabled}
-                  onClick={onToggleSearch}
-                >
-                  <Search height={18} width={18} />
-                </button>
-              )}
               {onToggleMic && (
                 <button
                   type="button"

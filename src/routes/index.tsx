@@ -1,15 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bot, Layers, ListChecks, Timer, ArrowRight } from "lucide-react";
-import { pageHead } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
-import {
-  defaultCards,
-  levelOf,
-  usePersistent,
-  useStats,
-  XP_PER_LEVEL,
-  type Card,
-} from "@/lib/store";
+import { levelOf, useCards, useStats, XP_PER_LEVEL } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => pageHead("Início", "O teu painel de estudo: progresso, metas e ferramentas."),
@@ -17,7 +10,12 @@ export const Route = createFileRoute("/")({
 });
 
 const tools = [
-  { to: "/tutor", icon: Bot, title: "Agente IA", text: "Organiza pedidos e explica qualquer conceito." },
+  {
+    to: "/tutor",
+    icon: Bot,
+    title: "Agente IA",
+    text: "Organiza pedidos e explica qualquer conceito.",
+  },
   {
     to: "/flashcards",
     icon: Layers,
@@ -30,7 +28,7 @@ const tools = [
 
 function Dashboard() {
   const { stats } = useStats();
-  const [cards] = usePersistent<Card[]>("cards", defaultCards);
+  const [cards] = useCards();
   const accuracy = stats.answered ? Math.round((stats.correct / stats.answered) * 100) : 0;
   const pending = cards.filter((c) => !c.known).length;
   const lvlXp = stats.xp % XP_PER_LEVEL;

@@ -1,48 +1,44 @@
-import ReactMarkdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
-import remarkBreaks from "remark-breaks";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import "katex/dist/katex.min.css";
+import { lazy, memo, Suspense, useMemo } from "react";
 
-function normalizeMath(content: string) {
-  return content
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `$$\n${math.trim()}\n$$`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math.trim()}$`)
-    .replace(
-      /(^|[^$])\\begin\{equation\*?\}([\s\S]*?)\\end\{equation\*?\}/g,
-      (_, prefix: string, math: string) => `${prefix}$$\n${math.trim()}\n$$`,
-    )
-    .replace(/(^|\n)\s*\\frac/g, "$1\\frac");
-}
+import { prepareMarkdown } from "@/lib/markdown";
 
-export function MessageContent({ content }: { content: string }) {
+/**
+ * The markdown renderer and its plugins are code-split: pages that never show a
+ * chat message (dashboard, quiz, focus…) do not download react-markdown,
+ * remark, micromark or KaTeX.
+ */
+const MarkdownRenderer = lazy(() => import("./message/MarkdownRenderer"));
+
+export type MessageContentProps = {
+  content: string;
+  /** Tolerate partially streamed markdown (open fences, dangling math). */
+  isStreaming?: boolean;
+};
+
+function MessageContentImpl({ content, isStreaming = false }: MessageContentProps) {
+  const prepared = useMemo(
+    () => prepareMarkdown(content, { streaming: isStreaming }),
+    [content, isStreaming],
+  );
+
   return (
     <div className="message-content">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-          a: ({ children, ...props }) => (
-            <a {...props} target="_blank" rel="noreferrer">
-              {children}
-            </a>
-          ),
-          pre: ({ children }) => <pre className="message-code-block">{children}</pre>,
-          code: ({ className, children, ...props }) => (
-            <code className={className ?? "message-inline-code"} {...props}>
-              {children}
-            </code>
-          ),
-          table: ({ children }) => (
-            <div className="message-table-wrap">
-              <table>{children}</table>
-            </div>
-          ),
-        }}
+      <Suspense
+        fallback={
+          // Server render and the first client frame show the raw text, which is
+          // readable and hydrates without mismatches.
+          <div className="message-content-fallback whitespace-pre-wrap">{content}</div>
+        }
       >
-        {normalizeMath(content)}
-      </ReactMarkdown>
+        <MarkdownRenderer prepared={prepared} />
+      </Suspense>
     </div>
   );
 }
+
+/**
+ * Memoised: a streaming answer re-renders once per delta, and every other
+ * message in the list keeps its previous tree.
+ */
+export const MessageContent = memo(MessageContentImpl);
+MessageContent.displayName = "MessageContent";

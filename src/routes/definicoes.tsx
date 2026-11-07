@@ -1,13 +1,47 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, Upload, Trash2, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Download,
+  KeyRound,
+  Loader2,
+  ShieldAlert,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, pageHead } from "@/components/AppShell";
+
+import { PageHeader } from "@/components/AppShell";
+import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  testAIConnection,
+  AI_PROXY_ENDPOINT_KEY,
+  isProxyConfigured,
+  friendlyAIError,
+} from "@/lib/ai";
+import {
+  API_KEY_RISK_NOTICE,
+  clearApiKey,
+  getApiKey,
+  maskApiKey,
+  setApiKey,
+} from "@/lib/credentials";
+import {
+  applyBackup,
+  buildBackup,
+  deleteAllAppData,
+  describeBackup,
+  parseBackup,
+  serializeBackup,
+  type BackupData,
+  type MergeStrategy,
+} from "@/lib/backup";
+import { clearDocuments } from "@/lib/idb";
 import { readStore, useStats, writeStore } from "@/lib/store";
-import { testAIConnection } from "@/lib/ai";
 
 export const Route = createFileRoute("/definicoes")({
   head: () => pageHead("Definições", "Perfil, tutor IA e cópia de segurança dos teus dados."),
@@ -22,24 +56,37 @@ const models = [
   ["openai/gpt-4o-mini", "GPT-4o Mini (pago)"],
 ];
 
+type ImportPreview = {
+  values: BackupData;
+  warnings: string[];
+  lines: string[];
+};
+
 function Definicoes() {
   const { stats, setStats } = useStats();
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(6);
   const [key, setKey] = useState("");
+  const [savedKey, setSavedKey] = useState("");
   const [model, setModel] = useState("openrouter/auto");
+  const [proxyUrl, setProxyUrl] = useState("");
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "error" | null>(null);
   const [testError, setTestError] = useState("");
   const [savedModel, setSavedModel] = useState("");
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [strategy, setStrategy] = useState<MergeStrategy>("merge");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(stats.name);
     setGoal(stats.weeklyGoal);
-    setKey(readStore("openrouter_key", ""));
+    const storedKey = getApiKey();
+    setKey(storedKey);
+    setSavedKey(storedKey);
     setModel(readStore("openrouter_model", "openrouter/auto"));
     setSavedModel(readStore("openrouter_model", ""));
+    setProxyUrl(readStore(AI_PROXY_ENDPOINT_KEY, ""));
   }, [stats.name, stats.weeklyGoal]);
 
   async function handleTestConnection() {
@@ -47,15 +94,17 @@ function Definicoes() {
     setTestResult(null);
     setTestError("");
 
-    // Save temporarily to test
-    writeStore("openrouter_key", key.trim());
+    // Saved temporarily so the test uses exactly what the tutor will use.
+    setApiKey(key.trim());
     writeStore("openrouter_model", model);
+    writeStore(AI_PROXY_ENDPOINT_KEY, proxyUrl.trim());
 
     const result = await testAIConnection();
 
     if (result.ok) {
       setTestResult("ok");
       setSavedModel(model);
+      setSavedKey(key.trim());
       toast.success("Ligação bem-sucedida! Podes começar a usar o tutor.");
     } else {
       setTestResult("error");
@@ -67,46 +116,83 @@ function Definicoes() {
 
   function save() {
     setStats({ ...stats, name: name.trim() || "Estudante", weeklyGoal: Math.max(1, goal) });
-    writeStore("openrouter_key", key.trim());
+    setApiKey(key.trim());
+    setSavedKey(key.trim());
     writeStore("openrouter_model", model);
+    writeStore(AI_PROXY_ENDPOINT_KEY, proxyUrl.trim());
     setSavedModel(model);
     toast.success("Definições guardadas neste dispositivo.");
   }
 
+  function removeKey() {
+    clearApiKey();
+    setKey("");
+    setSavedKey("");
+    toast.success("Chave OpenRouter removida deste navegador.");
+  }
+
   function backup() {
-    const data: Record<string, unknown> = {};
-    for (const k of Object.keys(localStorage))
-      if (k.startsWith("angostudy:") && k !== "angostudy:openrouter_key")
-        data[k] = localStorage.getItem(k);
+    const { envelope, skipped } = buildBackup();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(
-      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      new Blob([serializeBackup({ envelope, skipped })], { type: "application/json" }),
     );
     a.download = `angostudy-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    toast.success("Dados exportados. A chave OpenRouter não foi incluída.");
+    URL.revokeObjectURL(a.href);
+    toast.success("Dados exportados. A chave OpenRouter não foi incluída.", {
+      description:
+        skipped.length > 0
+          ? `Chaves ignoradas por estarem corrompidas: ${skipped.join(", ")}.`
+          : undefined,
+    });
   }
 
-  async function restore(f?: File) {
+  async function readBackup(f?: File) {
     if (!f) return;
+    let raw: string;
     try {
-      const data = JSON.parse(await f.text()) as Record<string, string>;
-      Object.entries(data).forEach(
-        ([k, v]) => k.startsWith("angostudy:") && localStorage.setItem(k, v),
-      );
-      toast.success("Dados restaurados.");
-      setTimeout(() => location.reload(), 600);
+      raw = await f.text();
     } catch {
-      toast.error("Ficheiro inválido.");
+      toast.error("Não foi possível ler o ficheiro.");
+      return;
+    }
+    const parsed = parseBackup(raw);
+    if (!parsed.ok) {
+      setImportPreview(null);
+      toast.error(parsed.error);
+      return;
+    }
+    for (const warning of parsed.warnings) toast.warning(warning);
+    setImportPreview({
+      values: parsed.values,
+      warnings: parsed.warnings,
+      lines: describeBackup(parsed.values),
+    });
+  }
+
+  function confirmImport() {
+    if (!importPreview) return;
+    try {
+      const result = applyBackup(importPreview.values, strategy);
+      toast.success(
+        `Cópia importada (${strategy === "merge" ? "juntar" : "substituir"}): ${result.written.length} chaves.`,
+        { description: "A chave OpenRouter nunca é importada." },
+      );
+      setImportPreview(null);
+      setTimeout(() => location.reload(), 800);
+    } catch (error) {
+      toast.error(
+        `Não foi possível importar: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
     }
   }
 
-  function wipe() {
+  async function wipe() {
     if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta ação é irreversível."))
       return;
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith("angostudy:"))
-      .forEach((k) => localStorage.removeItem(k));
+    deleteAllAppData();
+    await clearDocuments().catch(() => undefined);
     location.reload();
   }
 
@@ -136,26 +222,65 @@ function Definicoes() {
 
       <section className="panel space-y-4 p-5">
         <h2 className="font-semibold">Agente IA (OpenRouter)</h2>
+
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">A chave fica neste navegador</p>
+            <p>{API_KEY_RISK_NOTICE}</p>
+            <p>
+              Para produção, configura um proxy no servidor (campo abaixo) e deixa de guardar a
+              chave no browser.
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="k">Chave OpenRouter</Label>
           <Input
             id="k"
             type="password"
             placeholder="sk-or-..."
+            autoComplete="off"
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
+          {savedKey ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <KeyRound className="size-3.5" aria-hidden="true" />
+              Chave guardada: <code>{maskApiKey(savedKey)}</code>
+              <Button variant="outline" size="sm" onClick={removeKey}>
+                <Trash2 className="mr-1 size-3.5" /> Remover chave
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Cria uma chave gratuita em{" "}
+              <a
+                href="https://openrouter.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                openrouter.ai
+              </a>
+              . A chave só é enviada para o endpoint que configurares.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="proxy">Proxy de IA (opcional)</Label>
+          <Input
+            id="proxy"
+            placeholder="https://o-teu-servidor.example/api/ai"
+            value={proxyUrl}
+            onChange={(e) => setProxyUrl(e.target.value)}
+          />
           <p className="text-xs text-muted-foreground">
-            Cria uma chave gratuita em{" "}
-            <a
-              href="https://openrouter.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              openrouter.ai
-            </a>
-            . Nunca sai deste dispositivo exceto para o modelo que selecionares.
+            Quando preenchido, o browser deixa de falar com a OpenRouter e passa a usar este
+            endpoint (que deve acrescentar a chave do lado do servidor).{" "}
+            {isProxyConfigured() ? "Proxy ativo." : "Sem proxy configurado."}
           </p>
         </div>
 
@@ -174,7 +299,8 @@ function Definicoes() {
             ))}
           </select>
           <p className="text-xs text-muted-foreground">
-            Modelos gratuitos funcionam bem para a maioria dos casos.
+            Modelos gratuitos funcionam bem para a maioria dos casos. As imagens ainda não são
+            enviadas para o modelo.
           </p>
         </div>
 
@@ -202,7 +328,7 @@ function Definicoes() {
         {testResult === "error" && (
           <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Erro: {testError}
+            Erro: {friendlyAIError(testError)}
           </div>
         )}
 
@@ -221,6 +347,10 @@ function Definicoes() {
 
       <section className="panel space-y-3 p-5">
         <h2 className="font-semibold">Os teus dados</h2>
+        <p className="text-xs text-muted-foreground">
+          A cópia inclui perfil, notas, flashcards, conversas e modelo escolhido. Nunca inclui a
+          chave OpenRouter. Os documentos extraídos ficam em IndexedDB e não entram na cópia.
+        </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={backup}>
             <Download /> Exportar dados
@@ -234,12 +364,70 @@ function Definicoes() {
           <input
             ref={fileRef}
             type="file"
-            accept="application/json"
+            accept="application/json,.json"
             hidden
-            onChange={(e) => restore(e.target.files?.[0])}
+            onChange={(e) => {
+              void readBackup(e.target.files?.[0]);
+              e.target.value = "";
+            }}
           />
         </div>
+
+        {importPreview && (
+          <div
+            className="space-y-3 rounded-lg border border-border/70 bg-secondary/40 p-3 text-sm"
+            role="group"
+            aria-label="Confirmar importação"
+          >
+            <p className="font-medium">Confirmar importação</p>
+            <p className="text-xs text-muted-foreground">
+              Conteúdo detetado: {importPreview.lines.join(", ") || "sem dados"}.
+            </p>
+            {importPreview.warnings.map((warning) => (
+              <p key={warning} className="text-xs text-amber-600 dark:text-amber-400">
+                {warning}
+              </p>
+            ))}
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-medium">Como aplicar?</legend>
+              <label className="flex items-start gap-2 text-xs">
+                <input
+                  type="radio"
+                  name="strategy"
+                  value="merge"
+                  checked={strategy === "merge"}
+                  onChange={() => setStrategy("merge")}
+                />
+                <span>
+                  <strong>Juntar</strong> — mantém o que já existe e acrescenta o que falta.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-xs">
+                <input
+                  type="radio"
+                  name="strategy"
+                  value="replace"
+                  checked={strategy === "replace"}
+                  onChange={() => setStrategy("replace")}
+                />
+                <span>
+                  <strong>Substituir</strong> — apaga os dados atuais dessas chaves.
+                </span>
+              </label>
+            </fieldset>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={confirmImport}>
+                Importar
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setImportPreview(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
 }
+
+export default Definicoes;
