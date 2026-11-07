@@ -93,6 +93,7 @@ export async function buildTutorDocumentContext(
             },
           ],
           SUMMARY_SYSTEM_PROMPT,
+          { signal },
         );
       },
       {

@@ -29,14 +29,21 @@ export function readStore<T>(key: string, fallback: T): T {
   }
 }
 
-export function writeStore<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
+export function writeStore<T>(key: string, value: T): boolean {
+  if (typeof window === "undefined") return false;
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
     window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
+    return true;
   } catch {
-    // Private browsing and storage quotas can reject writes. The in-memory
-    // state still updates, so the current session remains usable.
+    // Private browsing and storage quotas can reject writes. Tell the UI
+    // instead of pretending the value was saved.
+    try {
+      window.dispatchEvent(new CustomEvent("angostudy-storage-error", { detail: key }));
+    } catch {
+      // Ignore secondary failures.
+    }
+    return false;
   }
 }
 
@@ -54,7 +61,7 @@ export function removeStore(key: string) {
  * Reads a value and validates it with a Zod schema. Corrupted or outdated data
  * degrades to the fallback instead of crashing the route.
  */
-export type Validator<T> = z.ZodType<T, z.ZodTypeDef, unknown>;
+export type Validator<T> = z.ZodType<T, unknown>;
 
 export function readValidated<T>(
   key: string,
@@ -70,8 +77,7 @@ export function readValidated<T>(
 export function writeValidated<T>(key: string, schema: Validator<T>, value: T): boolean {
   const parsed = schema.safeParse(value);
   if (!parsed.success) return false;
-  writeStore(key, parsed.data);
-  return true;
+  return writeStore(key, parsed.data);
 }
 
 /** useState that persists to localStorage, validates and syncs across tabs. */

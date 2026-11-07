@@ -66,6 +66,8 @@ export function useGenerationSource() {
   const [library, setLibrary] = useState<DocumentSummary[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  /** Identity of the upload that currently owns the state. */
+  const operationRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const pending = readPendingSource();
@@ -94,6 +96,8 @@ export function useGenerationSource() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    operationRef.current = controller;
+    const isCurrent = () => operationRef.current === controller;
     setFileRecord(null);
     setIngest({
       file,
@@ -112,9 +116,12 @@ export function useGenerationSource() {
     try {
       const outcome = await ingestDocumentFile(file, {
         signal: controller.signal,
-        onProgress: (progress) =>
-          setIngest((current) => (current ? { ...current, progress } : current)),
+        onProgress: (progress) => {
+          if (!isCurrent()) return;
+          setIngest((current) => (current ? { ...current, progress } : current));
+        },
       });
+      if (!isCurrent()) return;
       if (outcome.cancelled) {
         setIngest((current) => (current ? { ...current, cancelled: true } : current));
         if (outcome.record) setFileRecord(outcome.record);
@@ -122,6 +129,7 @@ export function useGenerationSource() {
       }
       if (outcome.record) setFileRecord(outcome.record);
     } catch (error) {
+      if (!isCurrent()) return;
       const ingestError = error instanceof DocumentIngestError ? error : null;
       setIngest((current) =>
         current
@@ -133,6 +141,8 @@ export function useGenerationSource() {
           : current,
       );
       if (ingestError?.partial) setFileRecord(ingestError.partial);
+    } finally {
+      if (isCurrent()) operationRef.current = null;
     }
   }, []);
 
@@ -144,6 +154,7 @@ export function useGenerationSource() {
 
   const removeIngest = useCallback(() => {
     abortRef.current?.abort();
+    operationRef.current = null;
     setIngest(null);
     setFileRecord(null);
   }, []);

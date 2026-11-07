@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useChatSession } from "../lib/chat-store";
-import type { ParsedChatMsg } from "../lib/schemas";
+import { useChatSession, validated } from "../lib/chat-store";
+import { MAX_CHAT_CONTENT, MAX_MESSAGES, type ParsedChatMsg } from "../lib/schemas";
 import { STORAGE_PREFIX } from "../lib/store";
 
 const LEGACY_KEY = `${STORAGE_PREFIX}chat`;
@@ -62,5 +62,38 @@ describe("conversation persistence", () => {
     const { result } = renderHook(() => useChatSession());
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.messages).toEqual([]);
+  });
+});
+
+describe("chat history validation", () => {
+  it("keeps the newest window instead of discarding the whole conversation", () => {
+    const messages = Array.from({ length: MAX_MESSAGES + 1 }, (_, index) => ({
+      id: `m${index}`,
+      role: "user" as const,
+      content: `mensagem ${index}`,
+    }));
+
+    const restored = validated(messages);
+
+    expect(restored).toHaveLength(MAX_MESSAGES);
+    expect(restored[0]?.content).toBe("mensagem 1");
+    expect(restored.at(-1)?.content).toBe(`mensagem ${MAX_MESSAGES}`);
+  });
+
+  it("drops only the invalid item and truncates an oversized answer", () => {
+    const restored = validated([
+      { id: "ok", role: "user", content: "válida" },
+      { id: "bad", role: "system", content: "não permitido" },
+      { id: "long", role: "assistant", content: "x".repeat(MAX_CHAT_CONTENT + 50) },
+    ]);
+
+    expect(restored).toHaveLength(2);
+    expect(restored[0]?.content).toBe("válida");
+    expect(restored[1]?.content).toHaveLength(MAX_CHAT_CONTENT);
+  });
+
+  it("returns an empty history for a non-array payload", () => {
+    expect(validated(null)).toEqual([]);
+    expect(validated({ messages: [] })).toEqual([]);
   });
 });

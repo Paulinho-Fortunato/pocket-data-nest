@@ -165,7 +165,7 @@ function transactionDone(tx: IDBTransaction, label = "transação"): Promise<voi
   });
 }
 
-/** Persists a document and its chunks. Throws only on invalid records. */
+/** Persists a document and its chunks in one transaction. Throws only on invalid records. */
 export async function saveDocument(record: DocumentRecord): Promise<void> {
   const parsed = DocumentRecordSchema.parse(migrateDocumentRecord(record));
   const { chunks, ...stored } = parsed;
@@ -175,60 +175,75 @@ export async function saveDocument(record: DocumentRecord): Promise<void> {
     memory.chunks.set(stored.id, chunks);
     return;
   }
-  // IndexedDB transactions auto-commit as soon as they are idle, so each step
-  // uses its own transaction instead of awaiting between requests.
-  await deleteChunksOfDocument(db, stored.id);
+  // Deleting the old chunks and writing the new record/chunks must be atomic.
+  // Otherwise a timeout after the delete leaves a `ready` document with zero
+  // chunks, and the tutor silently loses its context.
   const tx = db.transaction([DOCUMENTS, CHUNKS], "readwrite");
   const done = transactionDone(tx, "gravação do documento");
-  try {
-    tx.objectStore(DOCUMENTS).put(stored);
-    const chunkStore = tx.objectStore(CHUNKS);
-    for (const chunk of chunks) chunkStore.put(chunk);
-  } catch (error) {
+  const chunkStore = tx.objectStore(CHUNKS);
+  const abort = () => {
     try {
       tx.abort();
     } catch {
-      // ignore
+      // Ignore: the transaction may already have finished.
     }
+  };
+  const cursorRequest = chunkStore.index("documentId").openCursor(IDBKeyRange.only(stored.id));
+  cursorRequest.onerror = abort;
+  cursorRequest.onsuccess = () => {
+    const cursor = cursorRequest.result;
+    if (cursor) {
+      cursor.delete();
+      cursor.continue();
+      return;
+    }
+    try {
+      tx.objectStore(DOCUMENTS).put(stored);
+      for (const chunk of chunks) chunkStore.put(chunk);
+    } catch {
+      abort();
+    }
+  };
+  try {
+    await done;
+  } catch (error) {
     throw new IdbError(
       `Não foi possível gravar o documento no dispositivo: ${
         error instanceof Error ? error.message : "erro desconhecido"
       }`,
     );
   }
-  await done;
   diag("idb:document-saved", { id: stored.id, chunks: chunks.length, chars: stored.totalChars });
 }
 
-/** Deletes every chunk of a document using a cursor (stays inside one transaction). */
-function deleteChunksOfDocument(db: IDBDatabase, documentId: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(CHUNKS, "readwrite");
-    const timer = setTimeout(() => {
-      reject(new IdbError("A limpeza dos trechos antigos demorou demasiado tempo."));
-    }, txTimeoutMs);
-    const settle = (fn: () => void) => {
-      clearTimeout(timer);
-      fn();
-    };
-    const request = tx
-      .objectStore(CHUNKS)
-      .index("documentId")
-      .openCursor(IDBKeyRange.only(documentId));
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (cursor) {
-        cursor.delete();
-        cursor.continue();
-      }
-    };
-    request.onerror = () =>
-      settle(() => reject(new IdbError("Falha ao substituir os trechos do documento.")));
-    tx.oncomplete = () => settle(() => resolve());
-    tx.onerror = () =>
-      settle(() => reject(new IdbError("Falha ao substituir os trechos do documento.")));
-    tx.onabort = () => settle(() => reject(new IdbError("Transação IndexedDB abortada.")));
-  });
+/** Deletes a document and its chunks in one transaction (no orphan metadata). */
+export async function deleteDocument(id: string): Promise<void> {
+  const db = await openDatabase();
+  if (!db) {
+    memory.documents.delete(id);
+    memory.chunks.delete(id);
+    return;
+  }
+  const tx = db.transaction([DOCUMENTS, CHUNKS], "readwrite");
+  const done = transactionDone(tx);
+  const abort = () => {
+    try {
+      tx.abort();
+    } catch {
+      // Ignore.
+    }
+  };
+  const chunkStore = tx.objectStore(CHUNKS);
+  tx.objectStore(DOCUMENTS).delete(id);
+  const cursorRequest = chunkStore.index("documentId").openCursor(IDBKeyRange.only(id));
+  cursorRequest.onerror = abort;
+  cursorRequest.onsuccess = () => {
+    const cursor = cursorRequest.result;
+    if (!cursor) return;
+    cursor.delete();
+    cursor.continue();
+  };
+  await done;
 }
 
 export async function loadDocument(id: string): Promise<DocumentRecord | null> {
@@ -294,19 +309,6 @@ export async function findDocumentByHash(hash: string): Promise<DocumentRecord |
   }
   if (!stored) return null;
   return loadDocument(stored.id);
-}
-
-export async function deleteDocument(id: string): Promise<void> {
-  const db = await openDatabase();
-  if (!db) {
-    memory.documents.delete(id);
-    memory.chunks.delete(id);
-    return;
-  }
-  const tx = db.transaction(DOCUMENTS, "readwrite");
-  tx.objectStore(DOCUMENTS).delete(id);
-  await transactionDone(tx);
-  await deleteChunksOfDocument(db, id);
 }
 
 export async function clearDocuments(): Promise<void> {

@@ -26,7 +26,7 @@ import {
 import { createOperationId } from "@/lib/async-control";
 import { diag } from "@/lib/diagnostics";
 import { createDocumentRecord, type DocumentRecord } from "@/lib/documents";
-import { deleteDocument, listDocuments, loadDocument, saveDocument } from "@/lib/idb";
+import { deleteDocument, loadDocument, saveDocument } from "@/lib/idb";
 import { isImageFile, parseYouTubeUrl, unsupportedAttachmentMessage } from "@/lib/extract";
 import { usePreferences } from "@/lib/preferences";
 import { useOnlineStatus } from "@/lib/pwa";
@@ -90,7 +90,7 @@ function Tutor() {
   const navigate = useNavigate();
   const online = useOnlineStatus();
   const { preferences, update } = usePreferences();
-  const { messages, setMessages, clear, flush } = useChatSession();
+  const { messages, setMessages, clear, flush, ready: historyReady } = useChatSession();
   const { award } = useStats();
   const [input, setInput] = useState("");
   const [streamingId, setStreamingId] = useState<string | null>(null);
@@ -407,10 +407,9 @@ function Tutor() {
     const operationId = uploadOpRef.current;
     ingestAbortRef.current?.abort();
     if (!operationId) return;
-    // Invalidate the operation right away: a result that was already queued
-    // must never replace the "cancelled" state with "ready".
-    uploadOpRef.current = null;
-    ingestAbortRef.current = null;
+    // Keep the operation id alive: the pipeline may still be finishing a
+    // partial save, and `handleFile` must be allowed to adopt that partial.
+    // A newer upload will replace the id and make this handler stale.
     clearUploadWatchdog();
     setUpload((current) =>
       isUploadBusy(current)
@@ -437,6 +436,7 @@ function Tutor() {
     setUpload({ status: "idle" });
     setDocument(null);
     setContextInfo(null);
+    agentDocsRef.current.clear();
     removeStore(ACTIVE_DOCUMENT_KEY);
   }, [clearUploadWatchdog]);
 
@@ -495,20 +495,13 @@ function Tutor() {
 
   const loadAgentDocuments = useCallback(async (active: DocumentRecord | null) => {
     const cache = agentDocsRef.current;
-    if (active) cache.set(active.id, active);
-    try {
-      const summaries = await listDocuments();
-      for (const summary of summaries.slice(0, 3)) {
-        if (cache.has(summary.id)) continue;
-        const loaded = await loadDocument(summary.id);
-        if (loaded) cache.set(loaded.id, loaded);
-      }
-    } catch (error) {
-      diag("agent:library-load-failed", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    }
-    return Array.from(cache.values()).slice(0, 4);
+    // Explicit consent only: the tutor sees the attached document, never the
+    // rest of the library. The previous version loaded the three newest saved
+    // documents even when the user had not selected any.
+    cache.clear();
+    if (!active || active.status === "error") return [];
+    cache.set(active.id, active);
+    return [active];
   }, []);
 
   const runAssistant = useCallback(
@@ -779,8 +772,10 @@ function Tutor() {
       // One click must be enough: the text is captured right now, not from a
       // previous render, and a synchronous lock blocks accidental double sends.
       const payloadText = (override ?? input).trim();
-      if (sendLockRef.current || busy) {
-        diag("send:ignored", { reason: sendLockRef.current ? "locked" : "busy" });
+      if (sendLockRef.current || busy || !historyReady) {
+        diag("send:ignored", {
+          reason: sendLockRef.current ? "locked" : !historyReady ? "history-loading" : "busy",
+        });
         return;
       }
       if (!payloadText && !document) return;
@@ -823,7 +818,7 @@ function Tutor() {
         sendLockRef.current = false;
       }
     },
-    [busy, document, input, loadYouTube, messages, online, runAssistant, setMessages],
+    [busy, document, historyReady, input, loadYouTube, messages, online, runAssistant, setMessages],
   );
 
   const regenerate = useCallback(
@@ -1016,7 +1011,7 @@ function Tutor() {
             onStop={() => abortRef.current?.abort()}
             onFile={(file) => void handleFile(file)}
             loading={busy}
-            disabled={busy}
+            disabled={busy || !historyReady}
             offline={!online}
             suggestionList={[]}
             onPickSuggestion={setInput}
@@ -1077,6 +1072,7 @@ function Tutor() {
               onDetach={() => {
                 setDocument(null);
                 setContextInfo(null);
+                agentDocsRef.current.clear();
                 removeStore(ACTIVE_DOCUMENT_KEY);
                 toast.info(
                   "Documento removido do contexto. Continua guardado nos teus documentos.",
@@ -1084,6 +1080,7 @@ function Tutor() {
               }}
               onDelete={async (id) => {
                 await deleteDocument(id);
+                agentDocsRef.current.delete(id);
                 if (document?.id === id) {
                   setDocument(null);
                   removeStore(ACTIVE_DOCUMENT_KEY);

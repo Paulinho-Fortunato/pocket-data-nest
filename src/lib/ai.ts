@@ -325,16 +325,18 @@ async function postChat(
     return response;
   } catch (error) {
     if (signal?.aborted) throw new DOMException("Geração cancelada.", "AbortError");
+    // The internal timer aborts `controller`, which surfaces as AbortError.
+    // Check `timedOut` before classifying it as a user cancellation.
+    if (timedOut || (error instanceof Error && error.name === "TimeoutError")) {
+      throw new Error(
+        "O OpenRouter não respondeu em 75 segundos. Verifica a ligação e tenta novamente.",
+      );
+    }
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new DOMException("Geração cancelada.", "AbortError");
     }
     if (error instanceof Error && error.name === "AbortError") {
       throw new DOMException("Geração cancelada.", "AbortError");
-    }
-    if (timedOut || (error instanceof Error && error.name === "TimeoutError")) {
-      throw new Error(
-        "O OpenRouter não respondeu em 75 segundos. Verifica a ligação e tenta novamente.",
-      );
     }
     if (attempt + 1 < MAX_ATTEMPTS) {
       await wait(400 * 2 ** attempt);
