@@ -44,7 +44,7 @@ export function GenerationStatus({
           {formatElapsed(elapsedMs)}
         </span>
       ) : null}
-      {state === "streaming" && onStop ? (
+      {(state === "streaming" || state === "preparing") && onStop ? (
         <button
           type="button"
           className="tutor-msg-action"

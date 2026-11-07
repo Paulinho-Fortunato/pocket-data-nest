@@ -1021,9 +1021,11 @@ html[data-density="espacosa"] {
     }
   }
 
-  .ai-input .send-orb:hover:not(:disabled) {
-    transform: translateY(-10%) scale(1.08);
-    box-shadow: 0 10px 26px color-mix(in oklch, var(--accent-glow) 45%, transparent);
+  @media (hover: hover) and (pointer: fine) {
+    .ai-input .send-orb:hover:not(:disabled) {
+      transform: translateY(-10%) scale(1.08);
+      box-shadow: 0 10px 26px color-mix(in oklch, var(--accent-glow) 45%, transparent);
+    }
   }
 
   .ai-input .send-orb:active:not(:disabled) {

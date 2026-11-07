@@ -1,4 +1,6 @@
 import { DocumentRecordSchema } from "./schemas";
+import { withTimeout } from "./async-control";
+import { diag } from "./diagnostics";
 import {
   migrateDocumentRecord,
   type DocumentChunk,
@@ -38,19 +40,66 @@ const memory: MemoryTable = { documents: new Map(), chunks: new Map(), chat: nul
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
+/** Tests can shorten these; production values are deliberately generous. */
+let openTimeoutMs = 8_000;
+let txTimeoutMs = 15_000;
+
+export function __setIdbTimeoutsForTests(options: { open?: number; tx?: number }) {
+  if (options.open !== undefined) openTimeoutMs = options.open;
+  if (options.tx !== undefined) txTimeoutMs = options.tx;
+}
+
+/** IndexedDB reported a real failure (not "unavailable"). Data was not saved. */
+export class IdbError extends Error {
+  readonly code = "DB_ERROR";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "IdbError";
+  }
+}
+
 export function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== "undefined" && indexedDB !== null;
 }
 
+/**
+ * Opens the database with a hard timeout. The cached promise is cleared after a
+ * failure so a later attempt can retry instead of reusing a dead promise.
+ */
 function openDatabase(): Promise<IDBDatabase | null> {
   if (!isIndexedDbAvailable()) return Promise.resolve(null);
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise<IDBDatabase | null>((resolve) => {
+  const attempt = new Promise<IDBDatabase | null>((resolve, reject) => {
     let request: IDBOpenDBRequest;
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new IdbError(
+          "O armazenamento do dispositivo não respondeu (IndexedDB). Fecha outras abas da app e tenta novamente.",
+        ),
+      );
+    }, openTimeoutMs);
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
     try {
       request = indexedDB.open(DB_NAME, DB_VERSION);
-    } catch {
-      resolve(null);
+    } catch (error) {
+      finish(() =>
+        reject(
+          new IdbError(
+            `Não foi possível abrir o armazenamento do dispositivo: ${
+              error instanceof Error ? error.message : "erro desconhecido"
+            }`,
+          ),
+        ),
+      );
       return;
     }
     request.onupgradeneeded = () => {
@@ -75,25 +124,44 @@ function openDatabase(): Promise<IDBDatabase | null> {
         db.createObjectStore(CHATS, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => resolve(null);
-    request.onblocked = () => resolve(null);
+    request.onsuccess = () => finish(() => resolve(request.result));
+    request.onerror = () =>
+      finish(() => reject(new IdbError("O IndexedDB recusou a abertura (modo privado ou quota).")));
+    request.onblocked = () =>
+      finish(() =>
+        reject(
+          new IdbError(
+            "O IndexedDB está bloqueado por outra aba com uma versão antiga. Fecha as outras abas e tenta novamente.",
+          ),
+        ),
+      );
+  });
+  dbPromise = attempt.catch((error) => {
+    dbPromise = null;
+    diag("idb:open-failed", { message: error instanceof Error ? error.message : "unknown" });
+    throw error;
   });
   return dbPromise;
 }
 
-function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
+function requestToPromise<T>(request: IDBRequest<T>, label = "pedido ao IndexedDB"): Promise<T> {
+  const response = new Promise<T>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Falha no IndexedDB."));
+    request.onerror = () => reject(new IdbError(`Falhou ${label}.`));
+  });
+  return withTimeout(response, txTimeoutMs, "O armazenamento do dispositivo", {
+    message: "O armazenamento do dispositivo demorou demasiado a responder.",
   });
 }
 
-function transactionDone(tx: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
+function transactionDone(tx: IDBTransaction, label = "transação"): Promise<void> {
+  const done = new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Transação IndexedDB falhou."));
-    tx.onabort = () => reject(tx.error ?? new Error("Transação IndexedDB abortada."));
+    tx.onerror = () => reject(new IdbError(`A ${label} no dispositivo falhou.`));
+    tx.onabort = () => reject(new IdbError(`A ${label} no dispositivo foi abortada.`));
+  });
+  return withTimeout(done, txTimeoutMs, "O armazenamento do dispositivo", {
+    message: `A ${label} no dispositivo demorou demasiado tempo.`,
   });
 }
 
@@ -111,16 +179,38 @@ export async function saveDocument(record: DocumentRecord): Promise<void> {
   // uses its own transaction instead of awaiting between requests.
   await deleteChunksOfDocument(db, stored.id);
   const tx = db.transaction([DOCUMENTS, CHUNKS], "readwrite");
-  tx.objectStore(DOCUMENTS).put(stored);
-  const chunkStore = tx.objectStore(CHUNKS);
-  for (const chunk of chunks) chunkStore.put(chunk);
-  await transactionDone(tx);
+  const done = transactionDone(tx, "gravação do documento");
+  try {
+    tx.objectStore(DOCUMENTS).put(stored);
+    const chunkStore = tx.objectStore(CHUNKS);
+    for (const chunk of chunks) chunkStore.put(chunk);
+  } catch (error) {
+    try {
+      tx.abort();
+    } catch {
+      // ignore
+    }
+    throw new IdbError(
+      `Não foi possível gravar o documento no dispositivo: ${
+        error instanceof Error ? error.message : "erro desconhecido"
+      }`,
+    );
+  }
+  await done;
+  diag("idb:document-saved", { id: stored.id, chunks: chunks.length, chars: stored.totalChars });
 }
 
 /** Deletes every chunk of a document using a cursor (stays inside one transaction). */
 function deleteChunksOfDocument(db: IDBDatabase, documentId: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CHUNKS, "readwrite");
+    const timer = setTimeout(() => {
+      reject(new IdbError("A limpeza dos trechos antigos demorou demasiado tempo."));
+    }, txTimeoutMs);
+    const settle = (fn: () => void) => {
+      clearTimeout(timer);
+      fn();
+    };
     const request = tx
       .objectStore(CHUNKS)
       .index("documentId")
@@ -132,10 +222,12 @@ function deleteChunksOfDocument(db: IDBDatabase, documentId: string): Promise<vo
         cursor.continue();
       }
     };
-    tx.oncomplete = () => resolve();
+    request.onerror = () =>
+      settle(() => reject(new IdbError("Falha ao substituir os trechos do documento.")));
+    tx.oncomplete = () => settle(() => resolve());
     tx.onerror = () =>
-      reject(tx.error ?? new Error("Falha ao substituir os trechos do documento."));
-    tx.onabort = () => reject(tx.error ?? new Error("Transação IndexedDB abortada."));
+      settle(() => reject(new IdbError("Falha ao substituir os trechos do documento.")));
+    tx.onabort = () => settle(() => reject(new IdbError("Transação IndexedDB abortada.")));
   });
 }
 

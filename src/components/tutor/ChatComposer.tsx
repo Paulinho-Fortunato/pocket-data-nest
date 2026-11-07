@@ -6,7 +6,7 @@ import { AIInput } from "@/components/AIInput";
 export type ChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (text: string) => void;
   onStop: () => void;
   onFile: (file: File | undefined) => void;
   loading: boolean;

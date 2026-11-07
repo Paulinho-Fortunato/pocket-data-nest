@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AttachmentPreview } from "@/components/tutor/AttachmentPreview";
 import { ChatComposer } from "@/components/tutor/ChatComposer";
+import { GenerationStatus } from "@/components/tutor/GenerationStatus";
 import { MessageList } from "@/components/tutor/MessageList";
 
 const listProps = {
@@ -167,6 +168,27 @@ describe("full-screen tutor UI", () => {
     expect(bar).toHaveAttribute("aria-valuenow", "25");
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("shows a stop action while preparing or using a tool, never an endless spinner", () => {
+    const onStop = vi.fn();
+    const { rerender } = render(
+      <GenerationStatus state="preparing" label="A procurar no documento…" onStop={onStop} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Parar resposta" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+
+    rerender(<GenerationStatus state="streaming" label="A escrever…" onStop={onStop} />);
+    expect(screen.getByRole("button", { name: "Parar resposta" })).toBeInTheDocument();
+
+    rerender(
+      <GenerationStatus state="error" label="Não foi possível concluir" onRetry={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: /Tentar novamente/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Parar resposta" })).not.toBeInTheDocument();
+
+    rerender(<GenerationStatus state="idle" label="" />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("labels a scanned PDF as probable scan instead of ready", () => {
