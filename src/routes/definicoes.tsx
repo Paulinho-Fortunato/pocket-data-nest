@@ -42,20 +42,13 @@ import {
   type MergeStrategy,
 } from "@/lib/backup";
 import { clearDocuments } from "@/lib/idb";
+import { MODEL_GROUPS } from "@/lib/model-catalog";
 import { readStore, useStats, writeStore } from "@/lib/store";
 
 export const Route = createFileRoute("/definicoes")({
   head: () => pageHead("Definições", "Perfil, tutor IA e cópia de segurança dos teus dados."),
   component: Definicoes,
 });
-
-const models = [
-  ["meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (Free)"],
-  ["google/gemma-2-9b-it:free", "Gemma 2 9B (Free)"],
-  ["deepseek/deepseek-r1-distill-llama-70b:free", "DeepSeek R1 70B (Free)"],
-  ["openrouter/auto", "Automático (o OpenRouter escolhe)"],
-  ["openai/gpt-4o-mini", "GPT-4o Mini (pago)"],
-];
 
 type ImportPreview = {
   values: BackupData;
@@ -300,14 +293,19 @@ function Definicoes() {
             onChange={(e) => setModel(e.target.value)}
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
-            {models.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
+            {MODEL_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.models.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <p className="text-xs text-muted-foreground">
-            Modelos gratuitos funcionam bem para a maioria dos casos. As imagens ainda não são
+            Só aparecem modelos de conversa. Modelos gratuitos de embeddings, reranking, áudio ou
+            scoring não respondem no tutor e por isso não estão na lista. As imagens ainda não são
             enviadas para o modelo.
           </p>
         </div>
