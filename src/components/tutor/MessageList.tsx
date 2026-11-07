@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, History, Sparkles } from "lucide-react";
+import { ArrowDown, History } from "lucide-react";
 
+import { AiLogo } from "@/components/AiLogo";
 import { MessageItem } from "./MessageItem";
 import type { TutorMessage } from "./types";
 
@@ -128,9 +129,7 @@ export function MessageList({
       <div className="tutor-stream">
         {messages.length === 0 ? (
           <div className="tutor-welcome">
-            <span className="tutor-welcome-mark" aria-hidden="true">
-              <Sparkles className="size-6" />
-            </span>
+            <AiLogo className="tutor-welcome-mark" size="3.25rem" animated interactive />
             <h1>Em que posso ajudar a estudar?</h1>
             <p>
               Pergunta, cola texto ou anexa um PDF. A conversa fica guardada neste dispositivo e o

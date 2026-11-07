@@ -16,6 +16,7 @@ import {
   WifiOff,
   Zap,
 } from "lucide-react";
+import { AiLogo } from "@/components/AiLogo";
 import { InstallBanner } from "@/components/InstallBanner";
 import { useOnlineStatus } from "@/lib/pwa";
 import { levelOf, streak, useStats } from "@/lib/store";
@@ -121,9 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* ── Top bar compacta estilo app ─────────────────────────────── */}
       <header className="topbar">
         <Link to="/" className="topbar-brand" aria-label="AngoStudy — início">
-          <span className="topbar-logo" aria-hidden="true">
-            AS
-          </span>
+          <AiLogo className="topbar-logo topbar-ai-logo" animated interactive />
           <span className="topbar-wordmark">AngoStudy</span>
         </Link>
 

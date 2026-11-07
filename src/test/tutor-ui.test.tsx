@@ -49,6 +49,7 @@ describe("full-screen tutor UI", () => {
     );
     expect(screen.getByText("A resposta parcial")).toBeInTheDocument();
     expect(screen.getByText(/A resposta está a ser escrita/)).toBeInTheDocument();
+    expect(document.querySelector(".tutor-msg-avatar--ai .ai-logo")).not.toBeNull();
   });
 
   it("offers a retry for recoverable errors and keeps the text", () => {

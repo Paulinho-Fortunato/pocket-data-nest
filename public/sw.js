@@ -9,7 +9,7 @@
  *  - a new version waits until the app asks it o take over (SKIP_WAITING).
  */
 
-const VERSION = "angostudy-3.0.0";
+const VERSION = "angostudy-3.1.0";
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
 
@@ -17,6 +17,8 @@ const SHELL_URLS = [
   "/",
   "/offline.html",
   "/manifest.webmanifest",
+  "/favicon.svg",
+  "/favicon.ico",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/maskable-512.png",

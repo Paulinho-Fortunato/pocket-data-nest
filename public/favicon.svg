@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AngoStudy">
+  <defs>
+    <clipPath id="tile"><rect x="3" y="3" width="58" height="58" rx="17" /></clipPath>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5.5" />
+    </filter>
+    <radialGradient id="violet" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#a970ff" />
+      <stop offset="1" stop-color="#9147ff" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="green" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#5eeab5" />
+      <stop offset="1" stop-color="#34d399" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="pink" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#f472b6" />
+      <stop offset="1" stop-color="#ec4899" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="cyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#6ff4ff" />
+      <stop offset="1" stop-color="#05e0f5" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".16" />
+      <stop offset=".55" stop-color="#ffffff" stop-opacity=".04" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".1" />
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="3" y="3" width="58" height="58" rx="17" fill="#07080c" />
+    <g filter="url(#soft)">
+      <circle cx="32" cy="12" r="17" fill="url(#violet)" />
+      <circle cx="32" cy="54" r="17" fill="url(#green)" />
+      <circle cx="11" cy="31" r="16" fill="url(#pink)" />
+      <circle cx="53" cy="31" r="16" fill="url(#cyan)" />
+    </g>
+    <rect x="12.5" y="12.5" width="39" height="39" rx="10.5" fill="url(#glass)" stroke="#ffffff" stroke-opacity=".22" stroke-width=".7" />
+    <ellipse cx="26" cy="17" rx="11" ry="4" fill="#ffffff" opacity=".08" />
+    <g fill="#ffffff">
+      <rect x="23.6" y="26.4" width="4.6" height="11.2" rx="2.3" />
+      <rect x="35.8" y="26.4" width="4.6" height="11.2" rx="2.3" />
+    </g>
+  </g>
+  <rect x="3" y="3" width="58" height="58" rx="17" fill="none" stroke="#ffffff" stroke-opacity=".08" />
+</svg>
