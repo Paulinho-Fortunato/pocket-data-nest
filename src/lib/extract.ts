@@ -1,4 +1,6 @@
 import type { ChatMsg } from "./store";
+import { TimeoutError, withTimeout } from "./async-control";
+import { diag } from "./diagnostics";
 import {
   DOCUMENT_CONTEXT_END,
   DOCUMENT_CONTEXT_START,
@@ -71,6 +73,7 @@ export type ExtractionErrorCode =
   | "PDF_LOAD_FAILED"
   | "READ_FAILED"
   | "BINARY_CONTENT"
+  | "TIMEOUT"
   | "CANCELLED";
 
 /** Progress reported while a document is being read, page by page. */
@@ -89,6 +92,12 @@ export type ExtractionOptions = {
   onProgress?: ((progress: ExtractionProgress) => void) | undefined;
   /** Yield to the event loop between pages so the UI stays responsive. */
   yieldEvery?: number;
+  /** A single page that takes longer than this is marked as unreadable. */
+  pageTimeoutMs?: number;
+  /** Hard deadline for the whole extraction (partial text is preserved). */
+  totalTimeoutMs?: number;
+  /** Bytes already read by the caller, so the file is not read twice. */
+  bytes?: Uint8Array;
 };
 
 /** Thrown when the caller aborts; the partial text travels in `partial`. */
@@ -165,6 +174,8 @@ export function explainExtractionError(error: unknown): string {
       return "O ficheiro parece binário e não contém texto legível.";
     case "READ_FAILED":
       return "O navegador não conseguiu ler o ficheiro.";
+    case "TIMEOUT":
+      return "A leitura do documento demorou demasiado tempo e foi interrompida. O texto já lido foi mantido quando possível.";
     case "CANCELLED":
       return "Leitura cancelada.";
     default:
@@ -227,6 +238,10 @@ export async function extractPdfDocument(
   const totalPages = doc.numPages;
   const signal = options.signal;
   const yieldEvery = Math.max(1, options.yieldEvery ?? 3);
+  const pageTimeoutMs = options.pageTimeoutMs ?? 20_000;
+  const totalTimeoutMs = options.totalTimeoutMs ?? 180_000;
+  const deadline = Date.now() + totalTimeoutMs;
+  const timedOutPages: number[] = [];
   let text = "";
   const pages: DocumentPage[] = [];
   const emptyPages: number[] = [];
@@ -271,12 +286,32 @@ export async function extractPdfDocument(
     if (signal?.aborted) {
       throw new DocumentExtractionError("CANCELLED", "Leitura cancelada.", partialSnapshot());
     }
+    if (Date.now() > deadline) {
+      throw new DocumentExtractionError(
+        "TIMEOUT",
+        "A extração do PDF excedeu o tempo máximo. O texto já lido foi mantido.",
+        partialSnapshot(),
+      );
+    }
     let pageText = "";
     try {
-      const page = await doc.getPage(pageNumber);
-      const content = await page.getTextContent();
+      const content = await withTimeout(
+        (async () => {
+          const page = await doc.getPage(pageNumber);
+          return page.getTextContent();
+        })(),
+        pageTimeoutMs,
+        `A página ${pageNumber}`,
+        {
+          message: `A página ${pageNumber} demorou demasiado tempo (mais de ${Math.round(pageTimeoutMs / 1000)} s).`,
+        },
+      );
       pageText = joinPageItems(content.items);
-    } catch {
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        timedOutPages.push(pageNumber);
+        diag("extract:page-timeout", { pageNumber, timeoutMs: pageTimeoutMs });
+      }
       failedPages.push(pageNumber);
       pageText = "";
     }
@@ -295,6 +330,13 @@ export async function extractPdfDocument(
   }
   report("done", totalPages);
 
+  if (timedOutPages.length > 0) {
+    warnings.push(
+      `${timedOutPages.length} página(s) excederam o tempo limite e não foram lidas: ${timedOutPages
+        .slice(0, 20)
+        .join(", ")}${timedOutPages.length > 20 ? "…" : ""}.`,
+    );
+  }
   if (failedPages.length > 0) {
     warnings.push(
       `${failedPages.length} página(s) não puderam ser lidas: ${failedPages.slice(0, 20).join(", ")}${failedPages.length > 20 ? "…" : ""}.`,
@@ -359,18 +401,39 @@ export async function readPdfDocument(
   let doc: PdfDocumentLike & { destroy?: () => Promise<void> };
   throwIfAborted(options.signal);
   try {
-    const pdfjs = await import("pdfjs-dist");
-    const workerModule = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-    pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-    throwIfAborted(options.signal);
     if (file.size === 0) {
       throw new DocumentExtractionError("EMPTY_DOCUMENT", "O ficheiro está vazio.");
     }
-    const buffer = await file.arrayBuffer();
-    doc = (await pdfjs.getDocument({ data: new Uint8Array(buffer) })
-      .promise) as unknown as PdfDocumentLike & { destroy?: () => Promise<void> };
+    const data = options.bytes ?? new Uint8Array(await file.arrayBuffer());
+    if (data.byteLength === 0) {
+      throw new DocumentExtractionError("EMPTY_DOCUMENT", "O ficheiro está vazio.");
+    }
+    const opened = await withTimeout(
+      (async () => {
+        const pdfjs = await import("pdfjs-dist");
+        const workerModule = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+        pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+        throwIfAborted(options.signal);
+        return pdfjs.getDocument({ data }).promise;
+      })(),
+      30_000,
+      "Abrir o PDF",
+      {
+        signal: options.signal,
+        message:
+          "O PDF não abriu em 30 segundos. Pode estar corrompido, protegido ou demasiado pesado para este dispositivo.",
+      },
+    );
+    doc = opened as unknown as PdfDocumentLike & { destroy?: () => Promise<void> };
+    diag("extract:pdf-opened", { pages: doc.numPages, bytes: data.byteLength });
   } catch (error) {
     if (isCancelled(error)) throw error;
+    if (
+      error instanceof TimeoutError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw new DocumentExtractionError("TIMEOUT", error.message);
+    }
     const message = error instanceof Error ? error.message : "";
     if (/password/i.test(message)) {
       throw new DocumentExtractionError(
@@ -407,8 +470,16 @@ export async function readTextDocument(
   throwIfAborted(options.signal);
   let text: string;
   try {
-    text = await file.text();
+    text = await withTimeout(file.text(), 30_000, "Ler o ficheiro", {
+      signal: options.signal,
+      message: "O ficheiro não foi lido em 30 segundos.",
+    });
   } catch (error) {
+    if (error instanceof TimeoutError) {
+      throw new DocumentExtractionError("TIMEOUT", error.message);
+    }
+    if (options.signal?.aborted)
+      throw new DocumentExtractionError("CANCELLED", "Leitura cancelada.");
     throw new DocumentExtractionError(
       "READ_FAILED",
       error instanceof Error ? error.message : "Falha ao ler o ficheiro.",

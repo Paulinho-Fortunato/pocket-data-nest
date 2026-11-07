@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { askAIStream, consumeSseStream, normalizeNewlines, parseSseBlock } from "../lib/ai";
+import {
+  askAIStream,
+  consumeSseStream,
+  friendlyAIError,
+  normalizeNewlines,
+  parseSseBlock,
+} from "../lib/ai";
 
 const encoder = new TextEncoder();
 
@@ -198,5 +204,22 @@ describe("askAIStream", () => {
     const error = await askAIStream([], () => {}).catch((e: unknown) => e);
     expect((error as DOMException).name).toBe("AbortError");
     vi.unstubAllGlobals();
+  });
+});
+
+describe("centralised OpenRouter errors", () => {
+  it("explains limits and capabilities in Portuguese", () => {
+    expect(friendlyAIError("429 rate limit exceeded: free-models-per-day")).toMatch(
+      /limite diário/i,
+    );
+    expect(friendlyAIError("429 rate limit")).toMatch(/Demasiados pedidos/i);
+    expect(friendlyAIError("This model's maximum context length is 8192 tokens")).toMatch(
+      /limite de contexto/i,
+    );
+    expect(friendlyAIError("tool_choice is not supported for this model")).toMatch(
+      /não suporta ferramentas/i,
+    );
+    expect(friendlyAIError("401 Unauthorized")).toMatch(/chave/i);
+    expect(friendlyAIError("408 request timeout")).toMatch(/demorou demasiado/i);
   });
 });

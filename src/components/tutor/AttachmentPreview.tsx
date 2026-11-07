@@ -14,6 +14,7 @@ const STAGE_STEP: Record<IngestStage, number> = {
   opening: 2,
   pages: 3,
   indexing: 4,
+  persisting: 4,
   ready: 5,
   partial: 4,
   cancelled: 3,

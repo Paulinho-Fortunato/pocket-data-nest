@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AIInput } from "@/components/AIInput";
 
@@ -81,5 +81,56 @@ describe("AIInput composer", () => {
       <AIInput value="olá" onChange={() => {}} onSubmit={() => {}} onAbort={() => {}} loading />,
     );
     expect(screen.getByRole("button", { name: "Parar resposta" })).toBeInTheDocument();
+  });
+});
+
+describe("AIInput single-click send", () => {
+  it("sends on the first click even when the parent value is stale", () => {
+    const onSubmit = vi.fn();
+    render(<AIInput value="" onChange={() => {}} onSubmit={onSubmit} />);
+    const field = screen.getByLabelText("Mensagem para o tutor");
+    fireEvent.change(field, { target: { value: "primeira pergunta" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("primeira pergunta");
+  });
+
+  it("submits exactly once with Enter and uses Shift+Enter for a newline", () => {
+    const onSubmit = vi.fn();
+    render(<AIInput value="" onChange={() => {}} onSubmit={onSubmit} />);
+    const field = screen.getByLabelText("Mensagem para o tutor");
+    fireEvent.change(field, { target: { value: "pergunta com Enter" } });
+
+    fireEvent.keyDown(field, { key: "Enter", shiftKey: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("pergunta com Enter");
+  });
+
+  it("never fires twice for one click, even with an inline form submit", () => {
+    const onSubmit = vi.fn();
+    const { container } = render(<AIInput value="olá" onChange={() => {}} onSubmit={onSubmit} />);
+    const button = screen.getByRole("button", { name: "Enviar" });
+    fireEvent.click(button);
+    fireEvent.submit(container.querySelector("form")!);
+    // Two separate user actions = two sends; a single click must not double-fire.
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it("swaps immediately to Stop and stops instead of sending", () => {
+    const onSubmit = vi.fn();
+    const onAbort = vi.fn();
+    render(
+      <AIInput value="a gerar" onChange={() => {}} onSubmit={onSubmit} onAbort={onAbort} loading />,
+    );
+    const stop = screen.getByRole("button", { name: "Parar resposta" });
+    expect(stop).toHaveAttribute("type", "button");
+    fireEvent.click(stop);
+    expect(onAbort).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

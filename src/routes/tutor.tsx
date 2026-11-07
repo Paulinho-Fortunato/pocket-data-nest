@@ -14,17 +14,19 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { pageHead } from "@/lib/page-head";
 import { askAIStream, friendlyAIError, SYSTEM_PROMPT } from "@/lib/ai";
 import { useChatSession } from "@/lib/chat-store";
+import { DocumentIngestError, ingestDocumentFile } from "@/lib/document-pipeline";
 import {
-  DocumentIngestError,
-  ingestDocumentFile,
-  type IngestProgress,
-} from "@/lib/document-pipeline";
-import {
-  createDocumentRecord,
-  UNTRUSTED_DOCUMENT_INSTRUCTION,
-  type DocumentRecord,
-} from "@/lib/documents";
-import { deleteDocument, loadDocument, saveDocument } from "@/lib/idb";
+  attachmentView,
+  isProgressStage,
+  isUploadBusy,
+  toUploadProgress,
+  progressToUploadState,
+  type UploadState,
+} from "@/lib/upload-state";
+import { createOperationId } from "@/lib/async-control";
+import { diag } from "@/lib/diagnostics";
+import { createDocumentRecord, type DocumentRecord } from "@/lib/documents";
+import { deleteDocument, listDocuments, loadDocument, saveDocument } from "@/lib/idb";
 import { isImageFile, parseYouTubeUrl, unsupportedAttachmentMessage } from "@/lib/extract";
 import { usePreferences } from "@/lib/preferences";
 import { useOnlineStatus } from "@/lib/pwa";
@@ -33,12 +35,10 @@ import { markdownToSpeechText } from "@/lib/markdown";
 import { recordDuration, startTimer } from "@/lib/metrics";
 import { getYouTubeTranscript } from "@/lib/transcript";
 import { readStore, removeStore, useStats, writeStore, uid } from "@/lib/store";
-import {
-  answerLanguageInstruction,
-  buildTutorDocumentContext,
-  NO_EVIDENCE_INSTRUCTION,
-  type TutorContextInfo,
-} from "@/lib/tutor-context";
+import { answerLanguageInstruction, type TutorContextInfo } from "@/lib/tutor-context";
+import { runAgent } from "@/lib/agent/agent";
+import { getModelCapabilities } from "@/lib/agent/model-capabilities";
+import { planDocumentContext } from "@/lib/documents";
 
 export const Route = createFileRoute("/tutor")({
   head: () =>
@@ -47,16 +47,21 @@ export const Route = createFileRoute("/tutor")({
 });
 
 const ACTIVE_DOCUMENT_KEY = "active_document_id";
-const PENDING_CARDS_KEY = "angostudy:pending-cards-source";
 
-type IngestState = {
-  file: File;
-  progress: IngestProgress | null;
-  record: DocumentRecord | null;
-  error: string | null;
-  errorCode: string | null;
-  cancelled: boolean;
+const TOOL_LABELS: Record<string, string> = {
+  search_document: "A procurar no documento…",
+  get_document_chunk: "A ler um trecho do documento…",
+  summarize_document: "A resumir o documento…",
+  list_user_documents: "A consultar os documentos guardados…",
+  calculate: "A calcular…",
+  create_flashcards: "A preparar uma proposta de cartões…",
+  create_quiz: "A preparar uma proposta de quiz…",
 };
+
+function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? "A usar uma ferramenta local…";
+}
+const PENDING_CARDS_KEY = "angostudy:pending-cards-source";
 
 type SpeechResult = Event & {
   results: { length: number; [index: number]: { [index: number]: { transcript: string } } };
@@ -98,11 +103,16 @@ function Tutor() {
   const [document, setDocument] = useState<DocumentRecord | null>(null);
   const [contextInfo, setContextInfo] = useState<TutorContextInfo | null>(null);
   const [docPanelOpen, setDocPanelOpen] = useState(false);
-  const [ingest, setIngest] = useState<IngestState | null>(null);
+  const [upload, setUpload] = useState<UploadState>({ status: "idle" });
   const [listening, setListening] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const sendLockRef = useRef(false);
+  const conversationIdRef = useRef(createOperationId("chat"));
   const ingestAbortRef = useRef<AbortController | null>(null);
+  const uploadOpRef = useRef<string | null>(null);
+  const uploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUploadFileRef = useRef<File | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const lastRequestRef = useRef<{ text: string; documentId: string | null } | null>(null);
   const requestTimer = useRef<(() => number) | null>(null);
@@ -204,6 +214,13 @@ function Tutor() {
     writeStore(ACTIVE_DOCUMENT_KEY, record.id);
   }, []);
 
+  const clearUploadWatchdog = useCallback(() => {
+    if (uploadTimerRef.current) {
+      clearTimeout(uploadTimerRef.current);
+      uploadTimerRef.current = null;
+    }
+  }, []);
+
   const handleFile = useCallback(
     async (file?: File) => {
       if (!file) return;
@@ -211,11 +228,16 @@ function Tutor() {
         toast.error(unsupportedAttachmentMessage(file), { duration: 8000 });
         return;
       }
+      const operationId = createOperationId("upload");
+      uploadOpRef.current = operationId;
+      lastUploadFileRef.current = file;
       ingestAbortRef.current?.abort();
       const controller = new AbortController();
       ingestAbortRef.current = controller;
       // The card appears before any I/O starts.
-      setIngest({
+      setUpload({
+        status: "reading",
+        operationId,
         file,
         progress: {
           stage: "selected",
@@ -225,47 +247,65 @@ function Tutor() {
           chars: 0,
           percent: 0,
         },
-        record: null,
-        error: null,
-        errorCode: null,
-        cancelled: false,
       });
-      const stopShown = startTimer("upload:file-shown");
-      stopShown();
+      diag("upload:selected", {
+        operationId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+      startTimer("upload:file-shown")();
+
+      // Independent watchdog: even if a browser API never settles, the UI ends.
+      clearUploadWatchdog();
+      uploadTimerRef.current = setTimeout(() => {
+        if (uploadOpRef.current !== operationId) return;
+        // Invalidate before aborting: the pipeline may still resolve later, but
+        // its result must not replace this terminal error.
+        uploadOpRef.current = null;
+        uploadTimerRef.current = null;
+        controller.abort();
+        setUpload({
+          status: "error",
+          operationId,
+          file,
+          fileName: file.name,
+          error:
+            "A leitura demorou demasiado tempo e foi interrompida. O texto já lido foi guardado quando possível. Podes tentar novamente.",
+          code: "TIMEOUT",
+          canRetry: true,
+          partial: null,
+        });
+        diag("upload:watchdog", { operationId });
+      }, 240_000);
 
       try {
         const outcome = await ingestDocumentFile(file, {
           signal: controller.signal,
-          onProgress: (progress) =>
-            setIngest((current) => (current ? { ...current, progress } : current)),
+          operationId,
+          onProgress: (progress) => {
+            // A late event from an older upload must never touch this one.
+            if (uploadOpRef.current !== operationId) return;
+            if (!isProgressStage(progress.stage)) return;
+            diag("upload:progress", { ...toUploadProgress(operationId, file, progress) });
+            setUpload(progressToUploadState(operationId, file, progress));
+          },
         });
 
+        if (uploadOpRef.current !== operationId) return;
+
         if (outcome.cancelled) {
-          setIngest((current) =>
-            current
-              ? {
-                  ...current,
-                  record: outcome.record,
-                  cancelled: true,
-                  progress: {
-                    ...(current.progress ?? {
-                      stage: "cancelled",
-                      label: "Leitura cancelada",
-                      pagesDone: 0,
-                      totalPages: 0,
-                      chars: 0,
-                      percent: 0,
-                    }),
-                    stage: "cancelled",
-                    label: "Leitura cancelada",
-                  },
-                }
-              : current,
-          );
-          if (outcome.record) {
-            adoptDocument(outcome.record);
+          const partial = outcome.record;
+          if (partial) adoptDocument(partial);
+          setUpload({
+            status: "cancelled",
+            operationId,
+            fileName: file.name,
+            document: partial,
+          });
+          if (partial) {
             toast.warning(
-              `Leitura cancelada. Ficaram disponíveis ${outcome.record.processedPages} de ${outcome.record.totalPages} páginas — o resto não foi lido.`,
+              `Leitura cancelada. Ficaram disponíveis ${partial.processedPages} de ${partial.totalPages} páginas — o resto não foi lido.`,
               { duration: 8000 },
             );
           } else {
@@ -274,33 +314,35 @@ function Tutor() {
           return;
         }
 
-        if (!outcome.record) return;
-        setIngest((current) =>
-          current
-            ? {
-                ...current,
-                record: outcome.record,
-                progress: {
-                  ...(current.progress ?? {
-                    stage: "ready",
-                    label: "Pronto",
-                    pagesDone: 0,
-                    totalPages: 0,
-                    chars: 0,
-                    percent: 100,
-                  }),
-                  stage: "ready",
-                  label: outcome.cached ? "Já lido antes · reutilizado" : "Pronto a usar",
-                  percent: 100,
-                  pagesDone: outcome.record!.totalPages,
-                  totalPages: outcome.record!.totalPages,
-                  chars: outcome.record!.totalChars,
-                  cached: outcome.cached,
-                },
-              }
-            : current,
-        );
+        if (!outcome.record) {
+          throw new DocumentIngestError(
+            "READ_FAILED",
+            "A leitura terminou sem produzir um documento. Tenta novamente.",
+          );
+        }
+
+        if (outcome.record.status !== "ready") {
+          adoptDocument(outcome.record);
+          setUpload({
+            status: "partial",
+            operationId,
+            document: outcome.record,
+            reason: outcome.record.error ?? "Só parte do documento foi lida.",
+          });
+          toast.warning(
+            `Leitura parcial: ${outcome.record.processedPages} de ${outcome.record.totalPages} páginas. Podes continuar a usar o texto disponível.`,
+            { duration: 8000 },
+          );
+          return;
+        }
+
         adoptDocument(outcome.record);
+        setUpload({
+          status: "ready",
+          operationId,
+          document: outcome.record,
+          cached: outcome.cached,
+        });
         toast.success(
           outcome.cached
             ? `Documento reutilizado (já tinha sido lido): ${outcome.record.processedPages} páginas, ${outcome.record.totalChars.toLocaleString("pt-PT")} caracteres.`
@@ -311,49 +353,91 @@ function Tutor() {
           toast.warning(warning, { duration: 7000 });
         }
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (uploadOpRef.current !== operationId) return;
         const ingestError = error instanceof DocumentIngestError ? error : null;
-        setIngest((current) =>
-          current
-            ? {
-                ...current,
-                error: ingestError?.friendly ?? "Não foi possível ler este ficheiro.",
-                errorCode: ingestError?.code ?? "READ_FAILED",
-                record: ingestError?.partial ?? null,
-              }
-            : current,
-        );
-        if (ingestError?.partial) {
-          adoptDocument(ingestError.partial);
-          toast.warning(
-            `${ingestError.friendly} Foi guardado apenas o texto parcial (${ingestError.partial.processedPages}/${ingestError.partial.totalPages} páginas).`,
-            { duration: 9000 },
+        const partial = ingestError?.partial ?? null;
+        if (partial) adoptDocument(partial);
+
+        if (controller.signal.aborted) {
+          // Cancelled by the user or by the watchdog. The watchdog already set
+          // a terminal error; never downgrade it to "cancelled".
+          setUpload((current) =>
+            isUploadBusy(current)
+              ? {
+                  status: "cancelled",
+                  operationId,
+                  fileName: file.name,
+                  document: partial,
+                }
+              : current,
           );
-        } else {
-          toast.error(ingestError?.friendly ?? "Não foi possível ler este ficheiro.", {
-            duration: 8000,
-          });
+          return;
         }
+
+        const message =
+          ingestError?.friendly ??
+          (error instanceof Error && error.name === "TimeoutError"
+            ? "A leitura demorou demasiado tempo. Podes tentar novamente."
+            : "Não foi possível ler este ficheiro. Tenta novamente.");
+        const code =
+          ingestError?.code ??
+          (error instanceof Error && error.name === "TimeoutError" ? "TIMEOUT" : "READ_FAILED");
+        diag("upload:failed", { operationId, code });
+        setUpload({
+          status: "error",
+          operationId,
+          file,
+          fileName: file.name,
+          error: message,
+          code,
+          canRetry: true,
+          partial,
+        });
+        toast.error(message, { duration: 9000 });
+      } finally {
+        if (uploadOpRef.current === operationId) clearUploadWatchdog();
+        if (ingestAbortRef.current === controller) ingestAbortRef.current = null;
       }
     },
-    [adoptDocument],
+    [adoptDocument, clearUploadWatchdog],
   );
 
   const cancelIngest = useCallback(() => {
+    const operationId = uploadOpRef.current;
     ingestAbortRef.current?.abort();
-  }, []);
+    if (!operationId) return;
+    // Invalidate the operation right away: a result that was already queued
+    // must never replace the "cancelled" state with "ready".
+    uploadOpRef.current = null;
+    ingestAbortRef.current = null;
+    clearUploadWatchdog();
+    setUpload((current) =>
+      isUploadBusy(current)
+        ? {
+            status: "cancelled",
+            operationId,
+            fileName: current.file.name,
+            document: null,
+          }
+        : current,
+    );
+  }, [clearUploadWatchdog]);
 
   const retryIngest = useCallback(() => {
-    if (ingest?.file) void handleFile(ingest.file);
-  }, [handleFile, ingest]);
+    const file =
+      upload.status === "error" && upload.file ? upload.file : (lastUploadFileRef.current ?? null);
+    if (file) void handleFile(file);
+  }, [handleFile, upload]);
 
   const removeIngest = useCallback(() => {
     ingestAbortRef.current?.abort();
-    setIngest(null);
+    uploadOpRef.current = null;
+    clearUploadWatchdog();
+    setUpload({ status: "idle" });
     setDocument(null);
     setContextInfo(null);
     removeStore(ACTIVE_DOCUMENT_KEY);
-  }, []);
+  }, [clearUploadWatchdog]);
 
   const loadYouTube = useCallback(
     async (url: string) => {
@@ -379,7 +463,7 @@ function Tutor() {
         });
         await saveDocument(record);
         adoptDocument(record);
-        setIngest(null);
+        setUpload({ status: "idle" });
         toast.success(
           `Transcrição pronta: ${record.totalChars.toLocaleString("pt-PT")} caracteres.`,
           {
@@ -405,6 +489,26 @@ function Tutor() {
       await clear();
     })();
   }, [clear, flush, messages.length, preferences.confirmDelete]);
+
+  const agentDocsRef = useRef(new Map<string, DocumentRecord>());
+
+  const loadAgentDocuments = useCallback(async (active: DocumentRecord | null) => {
+    const cache = agentDocsRef.current;
+    if (active) cache.set(active.id, active);
+    try {
+      const summaries = await listDocuments();
+      for (const summary of summaries.slice(0, 3)) {
+        if (cache.has(summary.id)) continue;
+        const loaded = await loadDocument(summary.id);
+        if (loaded) cache.set(loaded.id, loaded);
+      }
+    } catch (error) {
+      diag("agent:library-load-failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+    return Array.from(cache.values()).slice(0, 4);
+  }, []);
 
   const runAssistant = useCallback(
     async (request: { text: string; documentId: string | null }, base: TutorMessage[]) => {
@@ -448,44 +552,79 @@ function Tutor() {
       generationTimer.current = startTimer("ai:generation-end");
 
       try {
-        let context = "";
+        // The UI panel describes the same chunks the agent will receive.
         let info: TutorContextInfo | null = null;
         if (request.documentId && document?.id === request.documentId) {
-          const built = await buildTutorDocumentContext(
-            document,
-            request.text,
-            controller.signal,
-            (message) =>
-              setGeneration({ state: "preparing", label: message ?? "A preparar a resposta…" }),
-          );
-          context = built.block;
-          info = built.info;
+          const plan = planDocumentContext(document, request.text);
+          const ranges: { from: number; to: number }[] = [];
+          for (const chunk of plan.chunks) {
+            const last = ranges[ranges.length - 1];
+            if (last && chunk.pageStart <= last.to + 2) last.to = Math.max(last.to, chunk.pageEnd);
+            else ranges.push({ from: chunk.pageStart, to: chunk.pageEnd });
+          }
+          info = {
+            documentName: document.name,
+            documentId: document.id,
+            mode: plan.mode,
+            usedChunks: plan.chunks.length,
+            totalChunks: plan.totalChunks,
+            totalChars: plan.totalChars,
+            usedChars: plan.usedChars,
+            partial: plan.partial,
+            batches: plan.summaryBatches.length,
+            pages: document.totalPages,
+            pageRanges: ranges.length ? ranges : [{ from: 1, to: document.totalPages }],
+            summary: "",
+          };
           setContextInfo(info);
         }
 
-        const system = [
-          SYSTEM_PROMPT,
-          answerLanguageInstruction(preferences.aiLanguage),
-          UNTRUSTED_DOCUMENT_INSTRUCTION,
-          context ? NO_EVIDENCE_INSTRUCTION : "",
-        ]
+        const system = [SYSTEM_PROMPT, answerLanguageInstruction(preferences.aiLanguage)]
           .filter(Boolean)
           .join("\n\n");
 
         const history = base
           .filter((message) => (message.content ?? "").trim().length > 0)
-          .slice(-10)
+          .slice(-12)
           .map(({ role, content }) => ({ role, content }));
 
-        setGeneration({ state: "streaming", label: "A responder…" });
+        const agentDocuments = await loadAgentDocuments(
+          document && document.status !== "error" ? document : null,
+        );
+        const model = readStore<string>("openrouter_model", "openrouter/auto");
+        const caps = getModelCapabilities(model);
+        setGeneration({ state: "preparing", label: "A analisar a pergunta…" });
 
-        const reply = await askAIStream(
-          [...history, { role: "user", content: `${request.text}${context}` }],
-          (delta) => {
+        const result = await runAgent({
+          query: request.text,
+          history,
+          documents: agentDocuments,
+          documentId: document?.id ?? null,
+          model,
+          system,
+          signal: controller.signal,
+          onProgress: (event) => {
+            if (event.status === "streaming") {
+              setGeneration({ state: "streaming", label: "A escrever a resposta…" });
+              return;
+            }
+            if (
+              event.status === "preparing" ||
+              event.status === "thinking" ||
+              event.status === "using-tool"
+            ) {
+              setGeneration({
+                state: "preparing",
+                label: event.tool ? toolLabel(event.tool) : event.label,
+              });
+            }
+          },
+          onDelta: (delta) => {
             if (firstToken) {
               firstToken = false;
+              diag("send:first-token", { assistantId });
               if (requestTimer.current) recordDuration("ai:first-token", requestTimer.current());
-              setGeneration({ state: "streaming", label: "A responder…" });
+              setGeneration({ state: "streaming", label: "A escrever a resposta…" });
             }
             answer += delta;
             setMessages((current) =>
@@ -496,14 +635,35 @@ function Tutor() {
               ),
             );
           },
-          { signal: controller.signal, system },
-        );
+        });
+
+        if (result.status === "cancelled") {
+          diag("send:aborted", { assistantId, chars: answer.length });
+          setStopped((current) => ({ ...current, [assistantId]: true }));
+          setGeneration({
+            state: "stopped",
+            label: answer.trim()
+              ? "Resposta interrompida — o texto parcial foi mantido."
+              : "Resposta interrompida antes de receber texto.",
+          });
+          setStreamingId(null);
+          void flush();
+          return;
+        }
+
+        if (result.status === "error") {
+          throw new Error(result.error || "O agente não conseguiu concluir a resposta.");
+        }
 
         if (generationTimer.current) recordDuration("ai:generation-end", generationTimer.current());
         generationTimer.current = null;
 
-        const sources =
-          info && context
+        const reply = result.text || answer;
+        if (!reply.trim()) throw new Error("O modelo respondeu sem conteúdo. Tenta novamente.");
+
+        const sources = result.sources.length
+          ? result.sources
+          : info
             ? [
                 {
                   name: info.documentName,
@@ -525,18 +685,31 @@ function Tutor() {
               : message,
           ),
         );
+        diag("send:completed", {
+          assistantId,
+          chars: reply.length,
+          tools: result.tools.length,
+          steps: result.steps,
+          fallback: result.fallbackUsed,
+          model: caps.id,
+        });
         setGeneration({ state: "idle", label: "" });
         setStreamingId(null);
         void flush();
 
-        if (reply.trim()) {
-          award(5);
-          toast.success("+5 XP ganhos! 🚀", { duration: 2000 });
-          speak(reply);
+        if (result.tools.length > 0) {
+          toast.message("Resposta com recurso a ferramentas locais", {
+            description: result.tools.map((tool) => tool.summary).join(" "),
+            duration: 3500,
+          });
         }
+        award(5);
+        toast.success("+5 XP ganhos! 🚀", { duration: 2000 });
+        speak(reply);
       } catch (error) {
         const aborted = controller.signal.aborted;
         if (aborted) {
+          diag("send:aborted", { assistantId, chars: answer.length });
           setStopped((current) => ({ ...current, [assistantId]: true }));
           setGeneration({
             state: "stopped",
@@ -549,6 +722,10 @@ function Tutor() {
           return;
         }
 
+        diag("send:failed", {
+          assistantId,
+          message: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+        });
         const raw = error instanceof Error ? error.message : "";
         const isKey = raw === "NO_KEY";
         const reason = isKey
@@ -574,34 +751,67 @@ function Tutor() {
         abortRef.current = null;
       }
     },
-    [award, document, flush, navigate, online, preferences.aiLanguage, setMessages, speak],
+    [
+      award,
+      document,
+      flush,
+      loadAgentDocuments,
+      navigate,
+      online,
+      preferences.aiLanguage,
+      setMessages,
+      speak,
+    ],
   );
 
   const send = useCallback(
     async (override?: string) => {
-      const text = (override ?? input).trim();
-      if (busy) return;
-      if (!text && !document) return;
+      // One click must be enough: the text is captured right now, not from a
+      // previous render, and a synchronous lock blocks accidental double sends.
+      const payloadText = (override ?? input).trim();
+      if (sendLockRef.current || busy) {
+        diag("send:ignored", { reason: sendLockRef.current ? "locked" : "busy" });
+        return;
+      }
+      if (!payloadText && !document) return;
       if (!online) {
         toast.error("Sem internet não consigo falar com o tutor. O resto da app continua offline.");
         return;
       }
-      const youtube = parseYouTubeUrl(text);
-      if (youtube && /^https?:\/\/\S+$/.test(text.trim())) {
-        await loadYouTube(text);
-        return;
+      sendLockRef.current = true;
+      try {
+        const youtube = parseYouTubeUrl(payloadText);
+        if (youtube && /^https?:\/\/\S+$/.test(payloadText)) {
+          await loadYouTube(payloadText);
+          return;
+        }
+        const payload = {
+          text: payloadText,
+          documentId: document?.id ?? null,
+          conversationId: conversationIdRef.current,
+        };
+        diag("send:payload", {
+          conversationId: payload.conversationId,
+          documentId: payload.documentId,
+          chars: payload.text.length,
+        });
+        const userMessage: TutorMessage = {
+          id: uid(),
+          role: "user",
+          content: payload.text || "Analisa o documento em uso.",
+          createdAt: Date.now(),
+        };
+        const base = [...messages, userMessage] as TutorMessage[];
+        setMessages(base);
+        // Clear only the exact snapshot that was sent; never discard new typing.
+        setInput((current) => (current.trim() === payload.text ? "" : current));
+        lastRequestRef.current = { text: payload.text, documentId: payload.documentId };
+        diag("send:started", { conversationId: payload.conversationId });
+        await runAssistant(lastRequestRef.current, base);
+        diag("send:finished", { conversationId: payload.conversationId });
+      } finally {
+        sendLockRef.current = false;
       }
-      const userMessage: TutorMessage = {
-        id: uid(),
-        role: "user",
-        content: text || "Analisa o documento em uso.",
-        createdAt: Date.now(),
-      };
-      const base = [...messages, userMessage] as TutorMessage[];
-      setMessages(base);
-      setInput("");
-      lastRequestRef.current = { text, documentId: document?.id ?? null };
-      await runAssistant(lastRequestRef.current, base);
     },
     [busy, document, input, loadYouTube, messages, online, runAssistant, setMessages],
   );
@@ -752,6 +962,7 @@ function Tutor() {
   );
 
   const documentMeta = document ? documentSubtitle(document) : null;
+  const attachment = useMemo(() => attachmentView(upload), [upload]);
 
   return (
     <>
@@ -791,7 +1002,7 @@ function Tutor() {
           <ChatComposer
             value={input}
             onChange={setInput}
-            onSubmit={() => void send()}
+            onSubmit={(text) => void send(text)}
             onStop={() => abortRef.current?.abort()}
             onFile={(file) => void handleFile(file)}
             loading={busy}
@@ -808,14 +1019,14 @@ function Tutor() {
             onOpenDocument={() => setDocPanelOpen(true)}
             onOpenLibrary={() => setDocPanelOpen(true)}
             attachment={
-              ingest ? (
+              attachment.file ? (
                 <AttachmentPreview
-                  file={ingest.file}
-                  progress={ingest.progress}
-                  record={ingest.record}
-                  error={ingest.error}
-                  cancelled={ingest.cancelled}
-                  scanned={ingest.errorCode === "NO_TEXT_LAYER"}
+                  file={attachment.file}
+                  progress={attachment.progress}
+                  record={attachment.record}
+                  error={attachment.error}
+                  cancelled={attachment.cancelled}
+                  scanned={attachment.scanned}
                   onCancel={cancelIngest}
                   onRetry={retryIngest}
                   onRemove={removeIngest}
@@ -867,7 +1078,15 @@ function Tutor() {
                   setDocument(null);
                   removeStore(ACTIVE_DOCUMENT_KEY);
                 }
-                setIngest((current) => (current?.record?.id === id ? null : current));
+                setUpload((current) => {
+                  if (
+                    (current.status === "ready" || current.status === "partial") &&
+                    current.document.id === id
+                  ) {
+                    return { status: "idle" };
+                  }
+                  return current;
+                });
                 toast.success("Documento apagado do dispositivo.");
               }}
               onReuse={(record) => {

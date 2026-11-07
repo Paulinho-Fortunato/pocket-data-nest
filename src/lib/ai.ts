@@ -1,4 +1,5 @@
 import { getApiKey } from "./credentials";
+import { TimeoutError, withTimeout } from "./async-control";
 import { readStore, type ChatMsg } from "./store";
 
 export const SYSTEM_PROMPT =
@@ -19,8 +20,21 @@ export function friendlyAIError(message: string): string {
     return "Este modelo não está disponível para a tua chave. Tenta outro modelo nas Definições.";
   if (m.includes("404") || m.includes("is not a valid model") || m.includes("model not found"))
     return "O modelo escolhido não existe (ou mudou de nome). Escolhe outro modelo nas Definições.";
+  if (m.includes("free-models-per-day") || (m.includes("free model") && m.includes("limit")))
+    return "Atingiste o limite diário de modelos gratuitos do OpenRouter. Escolhe outro modelo gratuito ou espera até amanhã.";
   if (m.includes("429") || m.includes("rate limit"))
     return "Demasiados pedidos de momento. Espera uns segundos e tenta de novo.";
+  if (
+    m.includes("context length") ||
+    m.includes("context_length_exceeded") ||
+    m.includes("maximum context") ||
+    m.includes("too many tokens")
+  )
+    return "O documento e a conversa excedem o limite de contexto deste modelo. Encurta a conversa, usa menos documento ou escolhe um modelo com mais contexto.";
+  if (m.includes("does not support tools") || m.includes("tool_choice is not supported"))
+    return "Este modelo não suporta ferramentas. Vou responder sem ferramentas; escolhe outro modelo nas Definições para usar pesquisa no documento.";
+  if (m.includes("408") || m.includes("request timeout"))
+    return "O OpenRouter demorou demasiado a responder. Tenta novamente.";
   if (
     m.includes("502") ||
     m.includes("503") ||
@@ -175,9 +189,27 @@ function applyChunk(data: string, onDelta: (delta: string) => void): string {
 
 /** --- Transport abstraction ------------------------------------------------------- */
 
+export type NativeToolCall = {
+  id: string;
+  name: string;
+  arguments: unknown;
+};
+
+export type NativeToolResult = {
+  text: string;
+  toolCalls: NativeToolCall[];
+};
+
 export type AiTransport = {
   readonly id: "browser" | "proxy";
   chat: (messages: ChatMsg[], system: string, signal?: AbortSignal) => Promise<string>;
+  /** Optional: only transports that can send OpenAI-compatible tools implement it. */
+  chatWithTools?: (
+    messages: ChatMsg[],
+    system: string,
+    tools: { name: string; description: string; parameters: unknown }[],
+    signal?: AbortSignal,
+  ) => Promise<NativeToolResult>;
   streamChat: (
     messages: ChatMsg[],
     system: string,
@@ -226,12 +258,17 @@ export async function consumeSseStream(
   });
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await withTimeout(reader.read(), 60_000, "A resposta do modelo", {
+        signal,
+        message:
+          "O modelo deixou de enviar dados durante 60 segundos. A resposta foi interrompida; o texto já recebido foi mantido.",
+      });
       if (done) break;
       if (value && value.length > 0) parser.push(value);
     }
     parser.flush();
   } catch (error) {
+    if (error instanceof TimeoutError) throw error;
     if (isAbortError(error, signal)) {
       throw new DOMException("Geração cancelada.", "AbortError");
     }
@@ -247,17 +284,66 @@ export async function consumeSseStream(
   return full;
 }
 
-async function postChat(body: unknown, headers: Record<string, string>, signal?: AbortSignal) {
+const REQUEST_TIMEOUT_MS = 75_000;
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503]);
+const MAX_ATTEMPTS = 3;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * POST to OpenRouter with a hard timeout, abort support and limited retries with
+ * backoff for transient failures. The API key is never logged.
+ */
+async function postChat(
+  body: unknown,
+  headers: Record<string, string>,
+  signal?: AbortSignal,
+  attempt = 0,
+): Promise<Response> {
+  if (signal?.aborted) throw new DOMException("Geração cancelada.", "AbortError");
+  const controller = new AbortController();
+  let timedOut = false;
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(OPENROUTER_ENDPOINT, {
+    const response = await fetch(OPENROUTER_ENDPOINT, {
       method: "POST",
-      ...(signal ? { signal } : {}),
+      signal: controller.signal,
       headers,
       body: JSON.stringify(body),
     });
+    if (RETRYABLE_STATUS.has(response.status) && attempt + 1 < MAX_ATTEMPTS) {
+      await wait(400 * 2 ** attempt);
+      return postChat(body, headers, signal, attempt + 1);
+    }
+    return response;
   } catch (error) {
-    if (isAbortError(error, signal)) throw new DOMException("Geração cancelada.", "AbortError");
+    if (signal?.aborted) throw new DOMException("Geração cancelada.", "AbortError");
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new DOMException("Geração cancelada.", "AbortError");
+    }
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new DOMException("Geração cancelada.", "AbortError");
+    }
+    if (timedOut || (error instanceof Error && error.name === "TimeoutError")) {
+      throw new Error(
+        "O OpenRouter não respondeu em 75 segundos. Verifica a ligação e tenta novamente.",
+      );
+    }
+    if (attempt + 1 < MAX_ATTEMPTS) {
+      await wait(400 * 2 ** attempt);
+      return postChat(body, headers, signal, attempt + 1);
+    }
     throw new Error(friendlyAIError(error instanceof Error ? error.message : "Falha no pedido."));
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -306,6 +392,63 @@ export const directTransport: AiTransport = {
     const full = await consumeSseStream(response.body, onDelta, signal);
     if (!full) throw new Error("Sem resposta");
     return full;
+  },
+  async chatWithTools(messages, system, tools, signal) {
+    const key = getApiKey();
+    const model = readStore<string>("openrouter_model", "openrouter/auto");
+    if (!key) throw new Error("NO_KEY");
+    const response = await postChat(
+      {
+        model,
+        messages: [{ role: "system", content: system }, ...messages],
+        tools: tools.map((tool) => ({
+          type: "function",
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+          },
+        })),
+        tool_choice: "auto",
+      },
+      requestHeaders(key),
+      signal,
+    );
+    const data = (await response.json().catch(() => null)) as {
+      choices?: {
+        message?: {
+          content?: string | null;
+          tool_calls?: {
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }[];
+        };
+      }[];
+      error?: { message?: string };
+    } | null;
+    if (!response.ok) {
+      throw new Error(
+        friendlyAIError(
+          (await readErrorMessage(response)) ||
+            data?.error?.message ||
+            `Pedido falhou (${response.status})`,
+        ),
+      );
+    }
+    const message = data?.choices?.[0]?.message;
+    const toolCalls: NativeToolCall[] = [];
+    for (const call of message?.tool_calls ?? []) {
+      const name = call.function?.name;
+      if (!name) continue;
+      let parsedArgs: unknown = {};
+      try {
+        parsedArgs = JSON.parse(call.function?.arguments ?? "{}");
+      } catch {
+        parsedArgs = null;
+      }
+      toolCalls.push({ id: call.id ?? `call_${toolCalls.length}`, name, arguments: parsedArgs });
+    }
+    return { text: message?.content ?? "", toolCalls };
   },
 };
 

@@ -60,7 +60,8 @@ const icons = {
 export type AIInputProps = {
   value: string;
   onChange: (value: string) => void;
-  onSubmit: () => void;
+  /** Receives the text captured synchronously at submit time (never stale state). */
+  onSubmit: (text: string) => void;
   onAbort?: () => void;
   placeholder?: string;
   suggestions?: string[];
@@ -101,6 +102,8 @@ export function AIInput({
 }: AIInputProps) {
   const [appendixOpen, setAppendixOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draftRef = useRef(value);
   const filesRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLButtonElement>(null);
   const appendixRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,19 @@ export function AIInput({
     if (!appendixOpen) return;
     appendixRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
   }, [appendixOpen]);
+
+  /* Keep a synchronous copy: the click/submit handler must not depend on the
+     parent having re-rendered after the last keystroke. */
+  function updateValue(next: string) {
+    draftRef.current = next;
+    onChange(next);
+  }
+
+  function submit(event?: { preventDefault: () => void }) {
+    event?.preventDefault();
+    if (loading) return;
+    onSubmit(draftRef.current);
+  }
 
   function closeAppendix() {
     setAppendixOpen(false);
@@ -134,7 +150,7 @@ export function AIInput({
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return;
-      onChange(value ? `${value}\n${text}` : text);
+      updateValue(value ? `${value}\n${text}` : text);
       taRef.current?.focus();
     } catch {
       // Browsers can deny clipboard access without a user-visible error.
@@ -161,7 +177,7 @@ export function AIInput({
                   onClick={() => {
                     const prompt = s.endsWith(" ") || s.endsWith(":") ? s : `${s} `;
                     onPickSuggestion?.(prompt);
-                    onChange(prompt);
+                    updateValue(prompt);
                     taRef.current?.focus();
                   }}
                 >
@@ -209,7 +225,12 @@ export function AIInput({
         )}
 
         {/* inert: a barra de anexos cobre o campo; nada atrás dela recebe foco */}
-        <div className="chat-wrapper" inert={appendixOpen || undefined}>
+        <form
+          ref={formRef}
+          className="chat-wrapper"
+          inert={appendixOpen || undefined}
+          onSubmit={submit}
+        >
           <textarea
             ref={taRef}
             id="chat-input"
@@ -221,11 +242,16 @@ export function AIInput({
             value={value}
             placeholder={placeholder}
             rows={2}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => updateValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                onSubmit();
+                // requestSubmit runs the same path as a click, exactly once.
+                if (formRef.current && typeof formRef.current.requestSubmit === "function") {
+                  formRef.current.requestSubmit();
+                } else {
+                  submit();
+                }
               }
             }}
           />
@@ -289,17 +315,17 @@ export function AIInput({
             <div className="right-buttons">
               {/* um único botão: o foco não se perde ao alternar enviar/parar */}
               <button
-                type="button"
+                type={loading ? "button" : "submit"}
                 className={loading ? "send-orb stop" : "send-orb"}
                 aria-label={loading ? "Parar resposta" : "Enviar"}
                 disabled={loading ? false : disabled}
-                onClick={loading ? onAbort : onSubmit}
+                onClick={loading ? onAbort : undefined}
               >
                 {loading ? icons.stop : icons.send}
               </button>
             </div>
           </div>
-        </div>
+        </form>
       </div>
 
       {hint && (
