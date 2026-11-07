@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { runAgent } from "../lib/agent/agent";
 import { buildAgentContext } from "../lib/agent/context";
+import { contextCharBudget, getModelCapabilities } from "../lib/agent/model-capabilities";
 import {
   DOCUMENT_CONTEXT_END,
   UNTRUSTED_DOCUMENT_INSTRUCTION,
@@ -191,5 +192,82 @@ describe("agent context", () => {
     expect(built.messages.at(-1)?.content).toContain("Resume o documento");
     expect(built.messages.at(-1)?.content).toContain(DOCUMENT_CONTEXT_END);
     expect(built.truncated).toBe(true);
+  });
+});
+
+describe("agent full-document context", () => {
+  function longDocument() {
+    const blocks = Array.from(
+      { length: 20 },
+      (_, index) =>
+        `BLOCO ${index + 1}\n` +
+        `Conteúdo de estudo da secção ${index + 1}, com explicações, exemplos e detalhes. `.repeat(
+          26,
+        ),
+    );
+    const text = blocks.join("\n\n");
+    return createDocumentRecord({
+      id: "doc-long",
+      name: "AngoStudy.html",
+      mime: "text/html",
+      size: text.length,
+      text,
+      pages: [{ page: 1, text, charStart: 0, charEnd: text.length }],
+      chunkSize: 2_000,
+      chunkOverlap: 0,
+    });
+  }
+
+  it("reads a 40k file entirely with the default 32k-context model", () => {
+    const record = longDocument();
+    const built = buildAgentContext({
+      system: "Sistema.",
+      history: [],
+      documents: [record],
+      documentId: record.id,
+      query: "Analisa o ficheiro AngoStudy.html e diz o que falta.",
+      maxChars: contextCharBudget(getModelCapabilities("openrouter/auto")),
+    });
+    const content = built.messages.at(-1)?.content ?? "";
+    expect(record.totalChars).toBeGreaterThan(35_000);
+    expect(content).toContain(`Trechos usados: ${record.chunks.length} de ${record.chunks.length}`);
+    expect(content).toContain("incluído integralmente");
+  });
+
+  it("sends every chunk when the document fits the model budget", () => {
+    const record = longDocument();
+    const built = buildAgentContext({
+      system: "Sistema.",
+      history: [],
+      documents: [record],
+      documentId: record.id,
+      query: "Analisa o ficheiro e diz o que falta.",
+      maxChars: 60_000,
+    });
+    const content = built.messages.at(-1)?.content ?? "";
+    expect(record.chunks.length).toBeGreaterThan(10);
+    expect(content).toContain(`Trechos usados: ${record.chunks.length} de ${record.chunks.length}`);
+    expect(content).toContain("incluído integralmente");
+    expect(content).not.toContain("apenas os trechos listados");
+    expect(built.usedChars).toBeLessThanOrEqual(60_000);
+  });
+
+  it("fills a smaller budget across the whole file, not just the first matches", () => {
+    const record = longDocument();
+    const built = buildAgentContext({
+      system: "Sistema.",
+      history: [],
+      documents: [record],
+      documentId: record.id,
+      query: "O que diz o BLOCO 1?",
+      maxChars: 12_000,
+    });
+    const content = built.messages.at(-1)?.content ?? "";
+    const used = Number(/Trechos usados: (\d+) de (\d+)/.exec(content)?.[1] ?? 0);
+    expect(used).toBeGreaterThan(3);
+    expect(used).toBeLessThan(record.chunks.length);
+    expect(content).toContain(`BLOCO ${record.chunks.length}`);
+    expect(content).toMatch(/apenas os trechos listados/);
+    expect(built.usedChars).toBeLessThanOrEqual(12_000);
   });
 });

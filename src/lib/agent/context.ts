@@ -28,8 +28,8 @@ export type BuiltAgentContext = {
 
 const MAX_HISTORY_MESSAGES = 12;
 const MAX_DOCUMENTS = 3;
-const MAX_CHUNKS_PER_DOCUMENT = 6;
-const MAX_EXCERPT_CHARS = 1_400;
+/** High enough to send a normal 40–80k document whole when the model allows it. */
+const MAX_CHUNKS_PER_DOCUMENT = 64;
 
 function compact(text: string, max: number): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -58,6 +58,24 @@ export function summarizeConversation(history: ChatMsg[], olderThan: number): st
   ].join("\n");
 }
 
+/**
+ * Characters available for document text after instructions, recent turns and
+ * the current question. Exported so the UI panel and the agent use the same
+ * budget instead of showing a different "used X of Y" count.
+ */
+export function estimateDocumentBudget(input: {
+  maxChars: number;
+  system: string;
+  history: ChatMsg[];
+  query: string;
+}): number {
+  const recent = input.history.slice(-MAX_HISTORY_MESSAGES);
+  const recentChars = recent.reduce((sum, message) => sum + message.content.length, 0);
+  const summaryReserve = input.history.length > MAX_HISTORY_MESSAGES ? 700 : 0;
+  const reserve = input.system.length + recentChars + summaryReserve + input.query.length + 1_200;
+  return Math.max(2_000, input.maxChars - reserve);
+}
+
 /** Builds the layered context: instructions, summary, recent turns, documents. */
 export function buildAgentContext(options: ContextBuildOptions): BuiltAgentContext {
   const { system, history, documents, query } = options;
@@ -73,25 +91,47 @@ export function buildAgentContext(options: ContextBuildOptions): BuiltAgentConte
       ? summarizeConversation(history, MAX_HISTORY_MESSAGES)
       : "";
 
+  const instruction = [
+    system,
+    UNTRUSTED_DOCUMENT_INSTRUCTION,
+    "Quando usares os trechos, indica as páginas. Distingue claramente o que está no documento do teu conhecimento geral.",
+    "Se os trechos não chegarem, diz que não encontraste evidência suficiente e o que falta.",
+  ].join("\n\n");
+
+  // Reserve room for instructions, recent turns and the question; the rest can
+  // be filled with document text. Splitting the budget across documents avoids
+  // sending three excerpts from the first file and nothing from the others.
+  const documentBudget = estimateDocumentBudget({
+    maxChars: options.maxChars,
+    system: instruction,
+    history,
+    query,
+  });
+  const perDocumentBudget = Math.max(
+    2_000,
+    Math.floor(documentBudget / Math.max(1, selectedDocs.length)),
+  );
+
   const blocks: string[] = [];
   const sources: AgentSource[] = [];
   for (const doc of selectedDocs) {
     if (doc.totalChars === 0) continue;
     const chunks = selectRelevantChunks(query, doc.chunks, {
-      maxChars: 7_000,
+      maxChars: perDocumentBudget,
       maxChunks: MAX_CHUNKS_PER_DOCUMENT,
     });
     if (chunks.length === 0) continue;
     const usedChars = chunks.reduce((sum, chunk) => sum + chunk.text.length, 0);
+    const full = chunks.length === doc.chunks.length;
     blocks.push(
       buildDocumentContextBlock({
         documentName: doc.name,
-        mode: doc.totalChars <= usedChars ? "full" : "retrieval",
-        chunks: chunks.map((chunk) => ({ ...chunk, text: compact(chunk.text, MAX_EXCERPT_CHARS) })),
+        mode: full ? "full" : "retrieval",
+        chunks,
         totalChunks: doc.chunks.length,
         totalChars: doc.totalChars,
-        usedChars,
-        partial: usedChars < doc.totalChars,
+        usedChars: full ? doc.totalChars : usedChars,
+        partial: !full,
       }),
     );
     const first = chunks[0];
@@ -103,13 +143,6 @@ export function buildAgentContext(options: ContextBuildOptions): BuiltAgentConte
       ...(last ? { pageEnd: last.pageEnd } : {}),
     });
   }
-
-  const instruction = [
-    system,
-    UNTRUSTED_DOCUMENT_INSTRUCTION,
-    "Quando usares os trechos, indica as páginas. Distingue claramente o que está no documento do teu conhecimento geral.",
-    "Se os trechos não chegarem, diz que não encontraste evidência suficiente e o que falta.",
-  ].join("\n\n");
 
   const messages: ChatMsg[] = [];
   if (summary) {

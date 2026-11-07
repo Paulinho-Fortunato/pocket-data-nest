@@ -401,25 +401,69 @@ export function selectRelevantChunks(
   chunks: DocumentChunk[],
   options: { maxChars?: number; maxChunks?: number; rankChunks?: ChunkRanker } = {},
 ): DocumentChunk[] {
-  const maxChars = options.maxChars ?? DEFAULT_CONTEXT_CHARS;
-  const maxChunks = options.maxChunks ?? 12;
+  const maxChars = Math.max(500, options.maxChars ?? DEFAULT_CONTEXT_CHARS);
+  const maxChunks = Math.max(1, options.maxChunks ?? 12);
+  if (chunks.length === 0) return [];
+
+  // Fast path: the caller's budget can hold every chunk. Never truncate a
+  // document that actually fits, otherwise the model reports a false "partial".
+  const totalChars = chunks.reduce((sum, chunk) => sum + chunk.text.length, 0);
+  if (chunks.length <= maxChunks && totalChars <= maxChars) return chunks.slice();
+
   const ranker = options.rankChunks ?? lexicalRanker;
   const ranked = ranker(query, chunks)
     .slice()
     .sort((a, b) => b.score - a.score || a.chunk.index - b.chunk.index);
 
-  const selected: DocumentChunk[] = [];
+  const selected = new Map<string, DocumentChunk>();
   let used = 0;
-  for (const { chunk, score } of ranked) {
-    if (selected.length >= maxChunks) break;
-    if (score <= 0 && selected.length > 0) break;
-    if (used + chunk.text.length > maxChars && selected.length > 0) continue;
-    selected.push(chunk);
+  const add = (chunk: DocumentChunk): boolean => {
+    if (selected.has(chunk.chunkId)) return false;
+    if (selected.size >= maxChunks) return false;
+    if (chunk.text.length > maxChars && selected.size > 0) return false;
+    if (used + chunk.text.length > maxChars && selected.size > 0) return false;
+    selected.set(chunk.chunkId, chunk);
     used += chunk.text.length;
-    if (used >= maxChars) break;
+    return true;
+  };
+
+  // 1) Exact lexical matches first, so a specific question still gets its
+  //    passage — but never spend the whole budget on similar chunks. Reserving
+  //    at least ~40% for coverage is what prevents "read only the beginning".
+  const lexicalLimit = Math.min(4, Math.max(1, Math.floor(maxChunks / 2)));
+  const lexicalBudget = Math.max(1, Math.floor(maxChars * 0.6));
+  let lexical = 0;
+  for (const { chunk, score } of ranked) {
+    if (score <= 0 || lexical >= lexicalLimit) break;
+    if (lexical > 0 && used + chunk.text.length > lexicalBudget) break;
+    if (add(chunk)) lexical++;
   }
+
+  // 2) Fill the remaining budget with evenly spaced chunks. This is what makes
+  //    "analyze this file" cover the whole document instead of only the first
+  //    passage that happens to contain the query words.
+  if (selected.size < Math.min(maxChunks, chunks.length) && used < maxChars) {
+    const average = Math.max(1, totalChars / chunks.length);
+    const fits = Math.floor((maxChars - used) / average);
+    const slots = Math.max(0, Math.min(Math.min(maxChunks, chunks.length) - selected.size, fits));
+    // Spread the remaining slots from the first to the last chunk (inclusive),
+    // so the model sees the beginning, middle and end instead of only the top.
+    for (let slot = 0; slot < slots; slot++) {
+      if (used >= maxChars || selected.size >= maxChunks) break;
+      const ratio = slots <= 1 ? 0 : slot / (slots - 1);
+      const index = Math.round(ratio * (chunks.length - 1));
+      add(chunks[index] as DocumentChunk);
+    }
+    // Always include the end of the document when it fits, then use any last gap.
+    add(chunks[chunks.length - 1] as DocumentChunk);
+    for (const chunk of chunks) {
+      if (used >= maxChars || selected.size >= maxChunks) break;
+      add(chunk);
+    }
+  }
+
   // Keep document order so the model reads the excerpts chronologically.
-  return selected.sort((a, b) => a.charStart - b.charStart);
+  return [...selected.values()].sort((a, b) => a.charStart - b.charStart);
 }
 
 const GLOBAL_QUERY_PATTERNS = [
@@ -664,7 +708,9 @@ export function buildDocumentContextBlock(input: ContextBlockInput): string {
     `Trechos usados: ${input.chunks.length} de ${input.totalChunks}`,
     `Caracteres usados: ${input.usedChars} de ${input.totalChars}`,
     input.partial
-      ? "Aviso: o documento é maior do que o orçamento de contexto; apenas os trechos listados foram lidos pelo modelo."
+      ? `Aviso: o documento é maior do que o orçamento de contexto deste modelo (${Math.round(
+          (input.usedChars / Math.max(1, input.totalChars)) * 100,
+        )}% do texto, ${input.usedChars} de ${input.totalChars} caracteres); apenas os trechos listados foram lidos pelo modelo. Não afirmes que leste o documento todo.`
       : "O documento completo cabe no contexto e foi incluído integralmente.",
   ].join("\n");
   const body =
