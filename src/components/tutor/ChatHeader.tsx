@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+
+import { AiLogo } from "@/components/AiLogo";
 import {
   ChevronLeft,
   Copy,
@@ -59,9 +61,7 @@ export function ChatHeader({
         <ChevronLeft className="size-5" aria-hidden="true" />
       </Link>
 
-      <span className="topbar-logo tutor-app-logo" aria-hidden="true">
-        AS
-      </span>
+      <AiLogo className="tutor-app-logo" size="1.9rem" animated interactive />
 
       <div className="tutor-app-heading">
         <h1 className="tutor-app-title">Tutor IA</h1>

@@ -54,8 +54,25 @@ describe("web app manifest", () => {
     }
     expect(manifest.icons.some((icon) => icon.purpose === "maskable")).toBe(true);
     expect(manifest.icons.some((icon) => icon.purpose === "any")).toBe(true);
+    expect(manifest.icons.some((icon) => icon.type === "image/svg+xml")).toBe(true);
     // iOS icon is linked from the document, not from the manifest.
     expect(pngSize("public/icons/apple-touch-icon.png")).toEqual([180, 180]);
+  });
+
+  it("links the new vector AI mark as the favicon", () => {
+    expect(root).toContain('href: "/favicon.svg"');
+    expect(root).toContain('href: "/favicon.ico"');
+    const favicon = read("public/favicon.svg");
+    expect(favicon).toContain("<svg");
+    expect(favicon).toContain("#9147ff");
+    expect(favicon).toContain("#05e0f5");
+    expect(favicon).toContain('aria-label="AngoStudy"');
+    expect(read("public/icons/ai-orb.svg")).toBe(favicon);
+
+    expect(pngSize("public/icons/favicon-32.png")).toEqual([32, 32]);
+    const ico = readFileSync(resolve(process.cwd(), "public/favicon.ico"));
+    expect(ico.readUInt16LE(2)).toBe(1);
+    expect(ico.readUInt16LE(4)).toBeGreaterThan(0);
   });
 });
 
@@ -70,7 +87,7 @@ describe("service worker safety", () => {
 
   it("supports a controlled update and an honest offline fallback", () => {
     expect(sw).toContain("SKIP_WAITING");
-    expect(sw).toContain("angostudy-3.0.0");
+    expect(sw).toContain("angostudy-3.1.0");
     expect(sw).toContain("/offline.html");
     expect(sw).toContain('caches.match("/offline.html")');
   });

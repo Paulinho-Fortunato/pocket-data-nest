@@ -1,6 +1,7 @@
 import { memo } from "react";
-import { AlertTriangle, CornerDownLeft, RefreshCw, Sparkles, User } from "lucide-react";
+import { AlertTriangle, CornerDownLeft, RefreshCw, User } from "lucide-react";
 
+import { AiLogo } from "@/components/AiLogo";
 import { MessageActions } from "@/components/MessageActions";
 import { MessageContent } from "@/components/MessageContent";
 import { formatMessageTime, type TutorMessage } from "./types";
@@ -37,8 +38,11 @@ function MessageItemImpl({
       aria-busy={isStreaming || undefined}
       aria-label={isUser ? "A tua mensagem" : "Resposta do tutor"}
     >
-      <span className="tutor-msg-avatar" aria-hidden="true">
-        {isUser ? <User className="size-4" /> : <Sparkles className="size-4" />}
+      <span
+        className={isUser ? "tutor-msg-avatar" : "tutor-msg-avatar tutor-msg-avatar--ai"}
+        aria-hidden="true"
+      >
+        {isUser ? <User className="size-4" /> : <AiLogo size="1.9rem" />}
       </span>
 
       <div className="tutor-msg-content">
