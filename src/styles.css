@@ -74,6 +74,31 @@
 .dark {
   --radius: 1rem;
 
+  /* ── Tokens centrais de layout, espaçamento e tipografia ───────────── */
+  --shell-gutter: 1rem;
+  --shell-topbar-h: 3.5rem;
+  --shell-tabbar-h: 4rem;
+  --shell-safe-top: env(safe-area-inset-top, 0px);
+  --shell-safe-right: env(safe-area-inset-right, 0px);
+  --shell-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --shell-safe-left: env(safe-area-inset-left, 0px);
+  --tap-min: 2.75rem; /* 44 × 44 px — alvo mínimo de toque */
+  --reading-max: 70ch;
+  --radius-card: calc(var(--radius) + 4px);
+  --radius-control: 0.75rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --shadow-card: 0 18px 40px oklch(0 0 0 / 0.38);
+  --shadow-raised: 0 10px 26px oklch(0 0 0 / 0.45);
+  --font-size-title: clamp(1.65rem, 1.25rem + 2vw, 2.25rem);
+  --line-height-body: 1.65;
+  --focus-outline: 2px solid var(--color-ring);
+  --focus-offset: 2px;
+
   /* neutros escuros */
   --background: oklch(0.13 0.012 80);
   --foreground: oklch(0.94 0.01 250);
@@ -88,14 +113,15 @@
   --border: oklch(0.28 0.015 250);
   --input: oklch(0.28 0.015 250);
 
-  /* dourado — a única cor de marca */
-  --primary: oklch(0.76 0.16 225);
-  --primary-foreground: oklch(0.12 0.02 240);
-  --accent: oklch(0.76 0.16 225);
-  --accent-foreground: oklch(0.12 0.02 240);
-  --ring: oklch(0.76 0.16 225);
-  --warning: oklch(0.82 0.12 225);
-  --success: oklch(0.76 0.16 225);
+  /* dourado — a única cor de marca (hue 85, coerente com gráficos e sidebar) */
+  --primary: oklch(0.79 0.135 85);
+  --primary-foreground: oklch(0.18 0.03 85);
+  --accent: oklch(0.79 0.135 85);
+  --accent-foreground: oklch(0.18 0.03 85);
+  --ring: oklch(0.86 0.12 88);
+  --warning: oklch(0.82 0.12 70);
+  /* sucesso a verde: a cor nunca é o único sinal (há ✓/texto junto) */
+  --success: oklch(0.78 0.13 150);
 
   /* tom quente muito suave para blocos de código e chips */
   --warm-dim: oklch(0.12 0.012 250);
@@ -122,14 +148,22 @@
   --gradient-panel: var(--card);
   --gradient-page: var(--background);
   --shadow-panel: 0 18px 40px oklch(0 0 0 / 0.38);
-  --shadow-glow: 0 8px 24px oklch(0.76 0.16 225 / 0.18);
+  --shadow-glow: 0 8px 24px oklch(0.79 0.135 85 / 0.2);
 
   /* tokens da barra de navegação (dourado sobre preto) */
   --nav-bg: color-mix(in oklch, var(--card) 72%, transparent);
   --nav-border: oklch(0.28 0.015 250);
-  --nav-highlight: oklch(0.76 0.16 225 / 0.14);
+  --nav-highlight: oklch(0.79 0.135 85 / 0.14);
 
   color-scheme: dark;
+}
+
+@media (min-width: 768px) {
+  :root,
+  .dark {
+    --shell-gutter: 1.5rem;
+    --shell-topbar-h: 4rem;
+  }
 }
 
 @layer base {
@@ -137,12 +171,20 @@
     border-color: var(--color-border);
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: clip;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     background: var(--gradient-page);
     background-attachment: fixed;
-    min-height: 100dvh;
+    /* svh primeiro, dvh quando suportado: nunca depende de unidades fixas */
+    min-height: 100svh;
+    overflow-x: clip;
     font-family: var(--font-sans);
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
@@ -180,6 +222,27 @@
   h3 {
     font-family: var(--font-display);
     letter-spacing: -0.03em;
+    overflow-wrap: break-word;
+  }
+
+  /* foco visível em todos os controlos (não só botões/links) */
+  :where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible,
+  :where(input, textarea, select):focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: var(--focus-offset);
+  }
+
+  /* media nunca ultrapassa o contentor */
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* blocos de conteúdo longo nunca empurram a página */
+  :where(pre, table) {
+    max-width: 100%;
   }
 
   textarea,
@@ -300,7 +363,6 @@
     top: 0;
     z-index: 20;
     display: flex;
-    height: 3.5rem;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
@@ -313,79 +375,6 @@
     backdrop-filter: blur(16px) saturate(170%);
     -webkit-backdrop-filter: blur(16px) saturate(170%);
     box-shadow: 0 10px 30px oklch(0 0 0 / 0.45);
-  }
-
-  @media (min-width: 768px) {
-    .topbar {
-      height: 4rem;
-      margin-inline: -1.5rem;
-      padding-inline: 1.5rem;
-    }
-  }
-
-  /* linha inferior com gradiente dourado que desliza lentamente */
-  .topbar::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklch, var(--primary) 85%, transparent),
-      transparent
-    );
-    background-size: 220% 100%;
-    animation: nav-line-flow 9s linear infinite;
-    pointer-events: none;
-  }
-
-  /* feixe de luz que atravessa a barra de vez em quando */
-  .topbar::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-    border-radius: inherit;
-  }
-
-  .topbar-beam {
-    position: absolute;
-    top: -60%;
-    left: -30%;
-    width: 38%;
-    height: 220%;
-    transform: rotate(18deg);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklch, var(--primary) 14%, transparent),
-      transparent
-    );
-    filter: blur(10px);
-    animation: nav-beam-sweep 7.5s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  @keyframes nav-line-flow {
-    to {
-      background-position: 220% 0;
-    }
-  }
-
-  @keyframes nav-beam-sweep {
-    0%,
-    55% {
-      left: -30%;
-    }
-
-    85%,
-    100% {
-      left: 130%;
-    }
   }
 
   .topbar-brand {
@@ -408,48 +397,11 @@
     background-size: 170% 170%;
     color: var(--color-primary-foreground);
     box-shadow: var(--shadow-glow);
-    animation: logo-hue 8s ease-in-out infinite;
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .topbar-brand:hover .topbar-logo {
     transform: scale(1.07) rotate(-4deg);
-  }
-
-  /* anel pulsante à volta do logótipo */
-  .topbar-logo::after {
-    content: "";
-    position: absolute;
-    inset: -4px;
-    border-radius: 1.05rem;
-    border: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
-    opacity: 0;
-    animation: logo-ring 3.2s ease-out infinite;
-    pointer-events: none;
-  }
-
-  @keyframes logo-hue {
-    0%,
-    100% {
-      background-position: 0% 50%;
-    }
-
-    50% {
-      background-position: 100% 50%;
-    }
-  }
-
-  @keyframes logo-ring {
-    0% {
-      transform: scale(0.92);
-      opacity: 0.8;
-    }
-
-    70%,
-    100% {
-      transform: scale(1.18);
-      opacity: 0;
-    }
   }
 
   .topbar-stats {
@@ -511,40 +463,6 @@
 
   .avatar-chip:active {
     transform: scale(0.95);
-  }
-
-  .icon-btn {
-    display: grid;
-    place-items: center;
-    width: 2.1rem;
-    height: 2.1rem;
-    border: 1px solid var(--nav-border);
-    border-radius: 9999px;
-    background: transparent;
-    color: var(--color-muted-foreground);
-    cursor: pointer;
-    transition:
-      color 0.2s ease,
-      border-color 0.2s ease,
-      background-color 0.2s ease,
-      transform 0.15s ease;
-  }
-
-  .icon-btn:hover {
-    color: var(--color-foreground);
-    border-color: color-mix(in oklch, var(--primary) 50%, transparent);
-    background: color-mix(in oklch, var(--primary) 12%, transparent);
-  }
-
-  .icon-btn:active {
-    transform: scale(0.9);
-  }
-
-  .icon-btn:focus-visible,
-  .avatar-chip:focus-visible,
-  .stat-chip:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 2px;
   }
 
   /* overlay escuro atrás do sheet "Mais" */
@@ -670,62 +588,7 @@
     flex-direction: column;
     position: relative;
     width: 100%;
-    user-select: none;
-  }
-
-  .ai-input .chat-marquee {
-    --gap: 1em;
-    display: flex;
-    gap: var(--gap);
-    margin-bottom: 0.85rem;
-    width: 100%;
-    mask-image: linear-gradient(
-      to right,
-      rgba(0, 0, 0, 0),
-      rgba(0, 0, 0, 1) 20%,
-      rgba(0, 0, 0, 1) 80%,
-      rgba(0, 0, 0, 0)
-    );
-    overflow: hidden;
-    transition: all 0.2s ease-in-out;
-  }
-
-  .ai-input .chat-marquee > ul {
-    display: flex;
-    gap: var(--gap);
-    flex-shrink: 0;
-    justify-content: space-around;
-    list-style: none;
-    animation: scroll-marquee-left 30s linear infinite;
-  }
-
-  .ai-input .chat-marquee > ul > li {
-    padding: 0.45rem 0.9rem;
-    background-color: color-mix(in oklch, var(--primary-color) 80%, transparent);
-    border: 2px solid color-mix(in oklch, var(--accent-glow) 30%, transparent);
-    border-radius: 10px;
-    color: var(--color-foreground);
-    font-weight: 700;
-    font-size: 0.78rem;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      all 0.2s ease-in-out,
-      transform 0.1s ease-in-out;
-  }
-
-  .ai-input .chat-marquee > ul > li:hover {
-    background-color: color-mix(in oklch, var(--accent-glow) 85%, black 5%);
-    border-color: var(--accent-glow);
-    color: var(--color-primary-foreground);
-  }
-
-  .ai-input .chat-marquee > ul > li:active {
-    transform: scale(0.9);
-  }
-
-  .ai-input .chat-marquee:hover > ul {
-    animation-play-state: paused !important;
+    min-width: 0;
   }
 
   .ai-input .chat-container {
@@ -811,17 +674,21 @@
   }
 
   .ai-input .chat-field {
-    padding: 0.6rem;
+    padding: 0.5rem 0.35rem;
     width: 100%;
-    min-height: 3rem;
-    max-height: 10rem;
+    min-height: 2.75rem;
+    /* cresce até um limite e depois rola internamente */
+    max-height: min(10rem, 32svh);
+    overflow-y: auto;
     background: none;
     border: none;
     color: var(--color-foreground);
-    font-size: 15.5px;
+    /* 16 px evita o zoom automático do iOS ao focar */
+    font-size: 1rem;
     line-height: 1.5;
     outline: none;
     resize: none;
+    user-select: text;
     font-family: inherit;
   }
 
@@ -849,9 +716,12 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 2.4rem;
-    height: 2.4rem;
-    border: 0.15rem solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 auto;
+    width: var(--tap-min);
+    height: var(--tap-min);
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 50%;
     background: transparent;
     color: var(--neutral-color);
@@ -881,12 +751,13 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.9rem;
+    gap: clamp(0.4rem, 3vw, 0.9rem);
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    padding: 0.5rem;
     border-radius: 1.15rem;
     overflow: hidden;
     background: color-mix(in oklch, var(--color-card) 82%, transparent);
@@ -897,12 +768,7 @@
     transition: background-color 0.25s ease;
   }
 
-  /* escondido sem abrir — nunca bloqueia cliques nem cobre o input */
-  .ai-input .appendix-bar:not([data-open="true"]) {
-    opacity: 0;
-    pointer-events: none;
-  }
-
+  /* a barra só existe no DOM quando está aberta (ver AIInput.tsx) */
   .ai-input .appendix-bar[data-open="true"] {
     opacity: 1;
     pointer-events: auto;
@@ -927,7 +793,9 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0.85rem;
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    padding: 0.6rem;
     border: 1px solid color-mix(in oklch, var(--accent-glow) 22%, transparent);
     background: color-mix(in oklch, var(--accent-glow) 10%, var(--color-secondary));
     color: var(--color-foreground);
@@ -941,26 +809,24 @@
       box-shadow 0.25s ease;
   }
 
+  /* etiqueta sempre visível: nenhuma ação depende de hover */
   .ai-input .appendix-bar > button::after {
     content: attr(data-label);
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.62rem;
+    position: static;
+    margin-left: 0.15rem;
+    font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     white-space: nowrap;
     color: var(--color-muted-foreground);
-    opacity: 0;
-    transition: opacity 0.2s ease;
     pointer-events: none;
   }
 
-  .ai-input .appendix-bar:hover > button::after,
-  .ai-input .appendix-bar > button:focus-visible::after {
-    opacity: 1;
+  @media (max-width: 24rem) {
+    .ai-input .appendix-bar > button::after {
+      display: none;
+    }
   }
 
   /* os orbes entram deslizando quando a barra abre (ou via CSS puro) */
@@ -1018,8 +884,11 @@
     position: relative;
     display: grid;
     place-items: center;
+    flex: 0 0 auto;
     width: 2.9rem;
     height: 2.9rem;
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
     border: none;
     border-radius: 50%;
     background: var(--gradient-brand);
@@ -1035,18 +904,6 @@
       opacity 0.2s ease;
   }
 
-  /* brilho que atravessa o orbe — toque vivo no dark */
-  .ai-input .send-orb::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(115deg, transparent 35%, oklch(1 0 0 / 0.35) 50%, transparent 65%);
-    transform: translateX(-120%);
-    animation: send-shine 3.4s ease-in-out infinite;
-    pointer-events: none;
-  }
-
   @keyframes send-gradient-shift {
     0%,
     100% {
@@ -1055,18 +912,6 @@
 
     50% {
       background-position: 100% 50%;
-    }
-  }
-
-  @keyframes send-shine {
-    0%,
-    55% {
-      transform: translateX(-120%);
-    }
-
-    80%,
-    100% {
-      transform: translateX(120%);
     }
   }
 
@@ -1094,34 +939,11 @@
   .ai-input .send-orb.stop {
     background: var(--color-destructive);
     color: var(--color-destructive-foreground);
-    animation: stop-pulse 1.6s ease-in-out infinite;
-  }
-
-  @keyframes stop-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-destructive) 45%, transparent);
-    }
-
-    50% {
-      box-shadow: 0 0 0 7px color-mix(in oklch, var(--color-destructive) 0%, transparent);
-    }
-  }
-
-  @keyframes scroll-marquee-left {
-    to {
-      transform: translateX(calc(-100% - var(--gap)));
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ai-input .chat-marquee > ul,
     .ai-input .chat-container::before,
-    .ai-input .send-orb,
-    .ai-input .send-orb::after,
-    .ai-input .send-orb.stop,
-    .topbar-beam,
-    .nav-particles i {
+    .ai-input .send-orb {
       animation: none;
     }
   }
@@ -1273,10 +1095,10 @@ body {
 .tutor-message-assistant,
 .stat-chip,
 .avatar-chip {
-  background: #0b0b0b !important;
-  background-image: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  background: #0b0b0b;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .panel,
@@ -1285,22 +1107,12 @@ body {
 .topbar,
 .tabbar,
 .more-sheet {
-  border-color: #242424 !important;
+  border-color: #242424;
 }
 
-.topbar-beam,
-.nav-particles,
-.topbar::after,
-.topbar-logo::after,
-.tabbar::before,
-.ai-input .chat-container::before,
-.ai-input .send-orb::after {
-  display: none !important;
-  animation: none !important;
-}
-
-.chat-marquee > ul {
-  animation: none !important;
+.ai-input .chat-container::before {
+  display: none;
+  animation: none;
 }
 
 .tabbar,
@@ -1310,21 +1122,21 @@ body {
 .tabbar button::before,
 .tabbar a svg,
 .tabbar button svg {
-  transition: none !important;
-  transform: none !important;
+  transition: none;
+  transform: none;
 }
 
 .tabbar a:active,
 .tabbar button:active {
-  transform: none !important;
+  transform: none;
 }
 
 .more-sheet {
-  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .tab-ripple {
-  display: none !important;
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1344,13 +1156,13 @@ body {
 }
 
 .topbar-logo {
-  display: grid !important;
-  width: 2.15rem !important;
-  height: 2.15rem !important;
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
   place-items: center;
   border: 1px solid #2c2c2c;
   border-radius: 0.7rem;
-  background: #101010 !important;
+  background: #101010;
   color: var(--primary);
   font-family: var(--font-display);
   font-size: 0.82rem;
@@ -1358,7 +1170,7 @@ body {
   letter-spacing: -0.12em;
   line-height: 1;
   box-shadow: 3px 3px 0 var(--primary);
-  animation: none !important;
+  animation: none;
 }
 
 .topbar-wordmark {
@@ -1369,67 +1181,10 @@ body {
   letter-spacing: -0.045em;
 }
 
-.ai-input .chat-marquee {
-  mask-image: none;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.ai-input .chat-marquee::-webkit-scrollbar {
-  display: none;
-}
-
-.ai-input .chat-marquee > ul {
-  gap: 0.55rem;
-  animation: none !important;
-}
-
-.ai-input .chat-marquee > ul > li {
-  border: 1px solid #2b2b2b;
-  border-radius: 999px;
-  background: #101010;
-  padding: 0.5rem 0.8rem;
-  font-size: 0.72rem;
-  animation: prompt-slide-in 0.42s ease both;
-}
-
-.ai-input .chat-marquee > ul > li:nth-child(2) {
-  animation-delay: 40ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(3) {
-  animation-delay: 80ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(4) {
-  animation-delay: 120ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(5) {
-  animation-delay: 160ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(6) {
-  animation-delay: 200ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(7) {
-  animation-delay: 240ms;
-}
-.ai-input .chat-marquee > ul > li:nth-child(8) {
-  animation-delay: 280ms;
-}
-
-@keyframes prompt-slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 .scroll-latest {
   position: absolute;
-  right: 1rem;
-  bottom: 8.2rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
   z-index: 5;
   display: inline-flex;
   align-items: center;
@@ -1438,8 +1193,10 @@ body {
   border-radius: 999px;
   background: #111;
   color: var(--foreground);
-  padding: 0.48rem 0.7rem;
-  font-size: 0.68rem;
+  min-height: var(--tap-min);
+  max-width: calc(100% - 1.5rem);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.72rem;
   font-weight: 700;
   opacity: 0;
   pointer-events: none;
@@ -1455,12 +1212,7 @@ body {
   transform: translateY(0);
 }
 
-@media (max-width: 640px) {
-  .scroll-latest {
-    right: 0.75rem;
-    bottom: 8.8rem;
-  }
-}
+/* (posição do "Ir para o fim" definida em 14.4 — dentro da área de scroll) */
 
 /* ── Conteúdo das mensagens: leitura confortável e código com toolbar ───── */
 
@@ -1637,7 +1389,7 @@ body {
   border-radius: 999px;
   background: transparent;
   color: var(--color-muted-foreground);
-  padding: 0.22rem 0.55rem;
+  padding: 0.4rem 0.7rem;
   font-size: 0.68rem;
   font-weight: 600;
   transition:
@@ -1710,4 +1462,716 @@ body {
   .animate-in {
     animation: none !important;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   14. Responsividade, toque e acessibilidade (mobile-first)
+   Regras transversais: nenhuma rota exige mais de 320 px. Tudo o que
+   transborda (tabelas, código, fórmulas) rola dentro do próprio bloco.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 14.1 Estrutura da aplicação ─────────────────────────────────────── */
+.app-frame {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  min-height: 100svh;
+  padding-inline: max(var(--shell-gutter), var(--shell-safe-left))
+    max(var(--shell-gutter), var(--shell-safe-right));
+  padding-bottom: calc(var(--shell-tabbar-h) + var(--shell-safe-bottom) + 1.25rem);
+  overflow-x: clip;
+}
+
+/* ligação de salto: primeiro foco do teclado */
+.skip-link {
+  position: fixed;
+  top: calc(var(--shell-safe-top) + 0.5rem);
+  left: 50%;
+  z-index: 100;
+  transform: translate(-50%, -200%);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--color-card);
+  padding: 0.6rem 1.1rem;
+  color: var(--color-foreground);
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+/* ── 14.2 Barra superior ─────────────────────────────────────────────── */
+.topbar {
+  height: auto;
+  min-height: var(--shell-topbar-h);
+  padding-top: calc(var(--shell-safe-top) + 0.4rem);
+  padding-bottom: 0.4rem;
+  padding-inline: max(var(--shell-gutter), var(--shell-safe-left))
+    max(var(--shell-gutter), var(--shell-safe-right));
+  margin-inline: calc(-1 * var(--shell-gutter));
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.topbar-brand {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.topbar-wordmark {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-stats {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 0.4rem;
+}
+
+.stat-chip {
+  min-width: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.stat-chip strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* abaixo de 420 px o wordmark encurta em vez de empurrar os dados */
+@media (max-width: 26.25rem) {
+  .topbar-wordmark {
+    font-size: 0.95rem;
+  }
+}
+
+/* ecrãs muito estreitos (320 px / zoom 400 %): só o monograma */
+@media (max-width: 22.5rem) {
+  .topbar-wordmark {
+    display: none;
+  }
+
+  .topbar-stats .stat-chip {
+    font-size: 0.68rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+/* ── 14.3 Sheet "Mais" ───────────────────────────────────────────────── */
+.more-sheet {
+  max-height: min(75svh, 30rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline: max(0.9rem, var(--shell-safe-left)) max(0.9rem, var(--shell-safe-right));
+  padding-bottom: max(0.9rem, var(--shell-safe-bottom));
+  width: min(30rem, calc(100% - 1rem));
+}
+
+/* o wrapper é o diálogo; a lista mantém o layout de grelha */
+.more-sheet-nav {
+  display: contents;
+}
+
+.more-sheet-item {
+  min-height: var(--tap-min);
+  overflow-wrap: anywhere;
+}
+
+.more-sheet-item:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* ── 14.4 Tutor: painel, scroll e composer ───────────────────────────── */
+.tutor-panel {
+  --tutor-chrome: calc(
+    var(--shell-topbar-h) + var(--shell-tabbar-h) + var(--shell-safe-top) + var(--shell-safe-bottom)
+  );
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  /* svh: estável com a barra do browser; dvh quando suportado (teclado) */
+  height: clamp(15rem, calc(100svh - var(--tutor-chrome) - 10.5rem), 48rem);
+  max-height: none;
+  min-height: 15rem;
+}
+
+@supports (height: 100dvh) {
+  .tutor-panel {
+    height: clamp(15rem, calc(100dvh - var(--tutor-chrome) - 10.5rem), 48rem);
+  }
+}
+
+/* telemóvel: mais espaço para a conversa */
+@media (max-width: 40rem) {
+  .tutor-panel {
+    height: clamp(14rem, calc(100dvh - var(--tutor-chrome) - 9rem), 40rem);
+  }
+}
+
+/* telemóvel na horizontal: composição compacta */
+@media (orientation: landscape) and (max-height: 32rem) {
+  .tutor-panel {
+    height: calc(100dvh - var(--tutor-chrome) - 3.5rem);
+    min-height: 11rem;
+  }
+
+  .tutor-panel .tutor-messages {
+    padding: 0.5rem;
+  }
+}
+
+.tutor-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tutor-messages {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  /* o último bloco nunca fica escondido atrás do composer */
+  scroll-padding-block-end: 1rem;
+}
+
+.tutor-messages :where(a, button, [tabindex]):focus-visible {
+  scroll-margin-block: 1.25rem;
+}
+
+.tutor-message-bubble {
+  min-width: 0;
+  /* deixa sempre espaço para o avatar da mensagem */
+  max-width: min(calc(100% - 2.5rem), 46rem);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .tutor-message-bubble {
+    max-width: min(82%, 46rem);
+  }
+}
+
+/* composer sempre por cima da conversa, com margem para o teclado */
+.tutor-composer {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  scroll-margin-block-end: calc(var(--shell-tabbar-h) + 1rem);
+}
+
+/* anexo: nome de ficheiro longo quebra em vez de ser cortado */
+.attachment-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.context-notice {
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+
+/* ── 14.5 Sugestões rápidas (scroll horizontal interno) ──────────────── */
+.ai-input {
+  user-select: text;
+  min-width: 0;
+}
+
+.ai-input .chat-suggestions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0.6rem;
+  padding: 0.15rem 0.1rem 0.4rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-input .chat-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-input .chat-suggestions ul {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-input .chat-suggestions li {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.ai-input .chat-suggestions button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  border: 1px solid #2b2b2b;
+  border-radius: 999px;
+  background: #101010;
+  padding: 0.4rem 0.9rem;
+  color: var(--color-foreground);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.ai-input .chat-suggestions button:hover {
+  border-color: color-mix(in oklch, var(--primary) 55%, transparent);
+  background: color-mix(in oklch, var(--primary) 14%, #101010);
+}
+
+.ai-input .chat-suggestions button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* ── 14.6 Composer: foco e contenção ────────────────────────────────── */
+.ai-input .chat-container,
+.ai-input .chat-wrapper,
+.ai-input .button-bar,
+.ai-input .left-buttons {
+  min-width: 0;
+}
+
+.ai-input .button-bar {
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+}
+
+.ai-input .left-buttons {
+  flex: 1 1 auto;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.ai-input .icon-drop:focus-visible,
+.ai-input .send-orb:focus-visible,
+.ai-input .appendix-bar > button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* ── 14.7 Conteúdo das mensagens ─────────────────────────────────────── */
+.message-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.message-content :where(p, li, td, th) {
+  overflow-wrap: anywhere;
+}
+
+.message-content a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* tabelas: rolagem interna, cabeçalho fixo */
+.message-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.message-table-wrap:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: -2px;
+}
+
+.message-content table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+}
+
+/* código: a toolbar quebra e o bloco rola dentro */
+.message-code {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.message-code-toolbar {
+  flex-wrap: wrap;
+  row-gap: 0.3rem;
+}
+
+.message-code-language {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.message-code-block {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  tab-size: 2;
+}
+
+.message-code-copy {
+  min-height: 2.25rem;
+  flex: 0 0 auto;
+}
+
+/* fórmulas grandes: rolam no próprio bloco */
+.message-content .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* ações por mensagem: alcançáveis com o dedo */
+.message-action {
+  min-height: 2.5rem;
+}
+
+@media (max-width: 40rem) {
+  .message-action {
+    min-width: var(--tap-min);
+    justify-content: center;
+  }
+}
+
+/* ── 14.8 Componentes de página ──────────────────────────────────────── */
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  min-width: 0;
+}
+
+.page-header > div {
+  min-width: 0;
+}
+
+.page-title {
+  font-size: var(--font-size-title);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.page-actions > * {
+  flex: 0 1 auto;
+}
+
+/* valores numéricos grandes (dashboard, progresso) */
+.stat-value {
+  font-size: clamp(1.35rem, 1.1rem + 1.6vw, 1.85rem);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.stat-card {
+  min-width: 0;
+  padding: var(--space-md);
+}
+
+.stat-card :where(small, p, span) {
+  overflow-wrap: anywhere;
+}
+
+/* mapa de calor dos últimos 14 dias */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: var(--space-md);
+}
+
+.heatmap-day {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 0.35rem;
+  background: var(--color-muted);
+}
+
+.heatmap-cell[data-active="true"] {
+  background: var(--color-primary);
+}
+
+.heatmap-label {
+  font-size: 0.58rem;
+  line-height: 1.2;
+  color: var(--color-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 25rem) {
+  .heatmap-label {
+    display: none;
+  }
+}
+
+/* cartão de flashcards: altura fluida e conteúdo rolável */
+.flip-card {
+  position: relative;
+  height: clamp(16rem, 52svh, 22rem);
+}
+
+.flip-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1rem, 4vw, 2rem);
+  text-align: center;
+}
+
+.flip-face > div,
+.flip-face > p {
+  max-width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .flip-question {
+    font-size: clamp(1.1rem, 4.6vw, 1.5rem);
+    line-height: 1.3;
+  }
+}
+
+/* notas: cabeçalho da nota nunca empurra a página */
+.note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.note-toolbar input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.note-body {
+  min-height: min(50svh, 26rem);
+  resize: vertical;
+}
+
+.note-item-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* cronómetro do modo foco */
+.foco-ring {
+  width: 100%;
+  max-width: 17.5rem;
+  height: auto;
+}
+
+.foco-time {
+  font-size: clamp(2.25rem, 12vw, 3.75rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 14.9 Alvos de toque (ponteiro grosso) ───────────────────────────── */
+@media (pointer: coarse) {
+  .app-frame :where(button, [role="button"]) {
+    min-height: var(--tap-min);
+  }
+
+  .app-frame :where(input:not([type="radio"]):not([type="checkbox"]), select, textarea) {
+    min-height: var(--tap-min);
+  }
+
+  .app-frame :where(a, button, [role="button"]):focus-visible {
+    outline-offset: 2px;
+  }
+
+  .tabbar a,
+  .tabbar button {
+    min-height: var(--tap-min);
+  }
+
+  .message-action,
+  .message-code-copy {
+    min-height: var(--tap-min);
+  }
+}
+
+/* ── 14.10 Ecrãs muito estreitos e zoom elevado (≥ 400 %) ────────────── */
+@media (max-width: 22.5rem) {
+  :root,
+  .dark {
+    --shell-gutter: 0.75rem;
+  }
+
+  .app-frame {
+    padding-bottom: calc(var(--shell-tabbar-h) + var(--shell-safe-bottom) + 1rem);
+  }
+
+  .page-header {
+    gap: var(--space-sm);
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .tutor-panel {
+    height: clamp(13rem, calc(100dvh - var(--tutor-chrome) - 9.5rem), 40rem);
+  }
+
+  .ai-input .chat-wrapper {
+    padding: 0.55rem;
+  }
+
+  .ai-input .icon-drop {
+    width: 2.6rem;
+    height: 2.6rem;
+    min-width: 2.6rem;
+    min-height: 2.6rem;
+  }
+
+  .ai-input .send-orb {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .message-content {
+    font-size: 0.9rem;
+  }
+
+  .stat-card {
+    padding: 0.75rem;
+  }
+}
+
+/* ── 14.11 Movimento reduzido (consolidado) ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .skip-link,
+  .chat-suggestions button,
+  .message-action,
+  .message-code-copy,
+  .stat-chip,
+  .avatar-chip,
+  .more-sheet {
+    transition: none !important;
+  }
+
+  .ai-input .chat-suggestions {
+    scroll-behavior: auto;
+  }
+}
+
+/* ── 14.12 Sem blur disponível: superfícies sólidas legíveis ─────────── */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar,
+  .tabbar,
+  .more-sheet,
+  .ai-input .chat-container {
+    background: var(--color-card);
+  }
+}
+
+/* barra de anexos: pílulas com etiqueta (sem depender de hover) */
+.ai-input .appendix-bar > button {
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding-inline: 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ai-input .appendix-bar > button::after {
+  position: static;
+  margin: 0;
+  transform: none;
+  opacity: 1;
+  font-size: 0.75rem;
+}
+
+/* nota de ajuda do composer */
+.ai-input-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  padding-inline: 0.15rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ai-input-hint svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+/* o conteúdo principal recebe foco programático (skip link e navegação):
+   não é um controlo, por isso não mostra anel de foco */
+.app-frame main:focus,
+.app-frame main:focus-visible {
+  outline: none;
 }

@@ -54,14 +54,17 @@ function Dashboard() {
     <div className="space-y-6">
       <div>
         <p className="text-xs capitalize text-muted-foreground">{date}</p>
-        <h1 className="mt-1 text-3xl font-bold md:text-4xl">
+        <h1 className="page-title mt-1 font-bold">
           Olá, {stats.name.split(" ")[0]}. <span className="text-brand">Vamos avançar?</span>
         </h1>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <section className="panel relative overflow-hidden p-6">
-          <div className="absolute -right-20 -top-28 size-64 rounded-full bg-primary/20 blur-3xl" />
+        <section className="panel relative overflow-hidden p-5 sm:p-6">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-20 -top-28 size-64 rounded-full bg-primary/20 blur-3xl"
+          />
           <span className="relative rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
             Plano inteligente
           </span>
@@ -98,9 +101,9 @@ function Dashboard() {
         </section>
         <div className="grid grid-cols-2 gap-3">
           {statCards.map((s) => (
-            <div key={s.label} className="panel p-4">
+            <div key={s.label} className="panel stat-card">
               <small className="text-xs text-muted-foreground">{s.label}</small>
-              <div className="mt-3 font-display text-2xl font-bold">{s.value}</div>
+              <div className="stat-value mt-3 font-display font-bold">{s.value}</div>
               <div className="text-xs text-success">{s.hint}</div>
             </div>
           ))}

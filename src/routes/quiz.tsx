@@ -148,6 +148,7 @@ function Quiz() {
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
+                aria-label="Tema do quiz"
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
                 placeholder="Ex.: fotossíntese, funções quadráticas..."
@@ -207,7 +208,14 @@ function Quiz() {
           const cur = qs[i]!;
           return (
             <div className="panel p-4 sm:p-6">
-              <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="mb-4 h-1.5 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Progresso do quiz"
+                aria-valuemin={0}
+                aria-valuemax={qs.length}
+                aria-valuenow={i + 1}
+              >
                 <div
                   className="h-full bg-brand transition-all"
                   style={{ width: `${((i + 1) / qs.length) * 100}%` }}
@@ -226,20 +234,41 @@ function Quiz() {
                       : option === picked
                         ? "border-destructive bg-destructive/15"
                         : "opacity-60";
+                  const isCorrect = picked && option === cur.answer;
+                  const isWrong = picked === option && option !== cur.answer;
                   return (
                     <button
                       key={`${option}-${index}`}
                       type="button"
                       onClick={() => pick(option)}
-                      className={`rounded-xl border border-border p-3 text-left text-sm transition hover:border-primary/50 ${state}`}
+                      aria-pressed={picked === option}
+                      className={`min-h-11 rounded-xl border border-border p-3 text-left text-sm transition hover:border-primary/50 ${state}`}
                     >
                       {option}
+                      {isCorrect && <span className="ml-2 font-bold text-success">✓ correta</span>}
+                      {isWrong && (
+                        <span className="ml-2 font-bold text-destructive">✗ a tua resposta</span>
+                      )}
                     </button>
                   );
                 })}
               </div>
               {picked && (
-                <Button className="mt-5" onClick={next}>
+                <p role="status" className="mt-4 text-sm">
+                  {picked === cur.answer ? (
+                    <span className="text-success">✓ Resposta correta.</span>
+                  ) : (
+                    <span>
+                      <span className="text-destructive">✗ Resposta incorreta.</span>{" "}
+                      <span className="text-muted-foreground">
+                        A resposta certa é: <strong>{cur.answer}</strong>
+                      </span>
+                    </span>
+                  )}
+                </p>
+              )}
+              {picked && (
+                <Button className="mt-4" onClick={next}>
                   {i + 1 >= qs.length ? "Ver resultado" : "Seguinte"}
                 </Button>
               )}

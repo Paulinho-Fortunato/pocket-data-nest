@@ -42,25 +42,22 @@ function Progresso() {
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {items.map(([l, v]) => (
-          <div key={l} className="panel p-5">
+          <div key={l} className="panel stat-card">
             <small className="text-xs text-muted-foreground">{l}</small>
-            <div className="mt-2 font-display text-3xl font-bold">{v}</div>
+            <div className="stat-value mt-2 font-display font-bold">{v}</div>
           </div>
         ))}
       </div>
       <div className="panel p-5">
         <h2 className="font-semibold">Últimos 14 dias</h2>
-        <div
-          className="mt-4 grid grid-cols-14 gap-1.5"
-          style={{ gridTemplateColumns: "repeat(14, minmax(0,1fr))" }}
-        >
+        <div className="heatmap" role="group" aria-label="Atividade dos últimos 14 dias">
           {last14.map((d) => (
-            <div key={d.iso} className="text-center">
-              <div
-                className={`aspect-square rounded-md ${d.active ? "bg-brand" : "bg-muted"}`}
-                title={d.iso}
-              />
-              <span className="text-[10px] text-muted-foreground">{d.label}</span>
+            <div key={d.iso} className="heatmap-day">
+              <div className="heatmap-cell" data-active={d.active} />
+              <span className="heatmap-label">{d.label}</span>
+              <span className="sr-only">
+                {d.iso}: {d.active ? "com sessão de estudo" : "sem sessão de estudo"}
+              </span>
             </div>
           ))}
         </div>
@@ -77,10 +74,10 @@ function Progresso() {
           {weak.map((c) => (
             <li
               key={c.id}
-              className="flex justify-between rounded-lg bg-secondary px-3 py-2 text-sm"
+              className="flex items-start justify-between gap-2 rounded-lg bg-secondary px-3 py-2 text-sm"
             >
-              <span className="truncate">{c.q}</span>
-              <span className="ml-2 text-xs text-muted-foreground">{c.deck}</span>
+              <span className="min-w-0 break-words">{c.q}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{c.deck}</span>
             </li>
           ))}
         </ul>

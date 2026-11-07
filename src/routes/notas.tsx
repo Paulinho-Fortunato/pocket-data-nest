@@ -71,10 +71,12 @@ function Notas() {
           {notes.map((n) => (
             <button
               key={n.id}
+              type="button"
               onClick={() => setActiveId(n.id)}
-              className={`panel p-3 text-left ${n.id === active?.id ? "border-primary/50" : ""}`}
+              aria-current={n.id === active?.id ? "true" : undefined}
+              className={`panel min-h-11 p-3 text-left ${n.id === active?.id ? "border-primary/50" : ""}`}
             >
-              <div className="truncate text-sm font-semibold">{n.title || "Sem título"}</div>
+              <div className="note-item-title text-sm font-semibold">{n.title || "Sem título"}</div>
               <div className="text-xs text-muted-foreground">
                 {new Date(n.updated).toLocaleDateString("pt-PT")}
               </div>
@@ -83,8 +85,9 @@ function Notas() {
         </div>
         {active ? (
           <div className="panel space-y-3 p-4">
-            <div className="flex gap-2">
+            <div className="note-toolbar">
               <Input
+                aria-label="Título da nota"
                 value={active.title}
                 onChange={(e) => patch({ title: e.target.value })}
                 className="font-semibold"
@@ -106,10 +109,11 @@ function Notas() {
               </Button>
             </div>
             <Textarea
+              aria-label="Conteúdo da nota"
               value={active.body}
               onChange={(e) => patch({ body: e.target.value })}
               placeholder="Começa a escrever..."
-              className="min-h-[50vh]"
+              className="note-body"
             />
           </div>
         ) : (

@@ -223,7 +223,10 @@ function Definicoes() {
       <section className="panel space-y-4 p-5">
         <h2 className="font-semibold">Agente IA (OpenRouter)</h2>
 
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+        <div
+          id="k-risco"
+          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200"
+        >
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="space-y-1">
             <p className="font-medium">A chave fica neste navegador</p>
@@ -243,12 +246,14 @@ function Definicoes() {
             placeholder="sk-or-..."
             autoComplete="off"
             value={key}
+            aria-describedby={testResult === "error" ? "k-risco k-erro" : "k-risco"}
+            aria-invalid={testResult === "error" || undefined}
             onChange={(e) => setKey(e.target.value)}
           />
           {savedKey ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <KeyRound className="size-3.5" aria-hidden="true" />
-              Chave guardada: <code>{maskApiKey(savedKey)}</code>
+              Chave guardada: <code className="break-all">{maskApiKey(savedKey)}</code>
               <Button variant="outline" size="sm" onClick={removeKey}>
                 <Trash2 className="mr-1 size-3.5" /> Remover chave
               </Button>
@@ -319,24 +324,36 @@ function Definicoes() {
         </Button>
 
         {testResult === "ok" && (
-          <div className="flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">
-            <CheckCircle className="h-4 w-4" />
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-lg border border-success/25 bg-success/10 p-3 text-sm text-foreground"
+          >
+            <CheckCircle className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
             Ligação bem-sucedida! Está tudo pronto.
           </div>
         )}
 
         {testResult === "error" && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            Erro: {friendlyAIError(testError)}
+          <div
+            id="k-erro"
+            role="alert"
+            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-foreground"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+            <span>Erro: {friendlyAIError(testError)}</span>
           </div>
         )}
 
         {savedModel && savedModel !== model && (
-          <div className="flex items-center gap-2 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            Mudaste de modelo mas ainda não guardaste. Clica em «Guardar definições» para o tutor
-            usar este modelo.
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+            <span>
+              Mudaste de modelo mas ainda não guardaste. Clica em «Guardar definições» para o tutor
+              usar este modelo.
+            </span>
           </div>
         )}
       </section>
@@ -390,7 +407,7 @@ function Definicoes() {
             ))}
             <fieldset className="space-y-2">
               <legend className="text-xs font-medium">Como aplicar?</legend>
-              <label className="flex items-start gap-2 text-xs">
+              <label className="flex min-h-11 items-start gap-2 py-1 text-xs">
                 <input
                   type="radio"
                   name="strategy"
@@ -402,7 +419,7 @@ function Definicoes() {
                   <strong>Juntar</strong> — mantém o que já existe e acrescenta o que falta.
                 </span>
               </label>
-              <label className="flex items-start gap-2 text-xs">
+              <label className="flex min-h-11 items-start gap-2 py-1 text-xs">
                 <input
                   type="radio"
                   name="strategy"
