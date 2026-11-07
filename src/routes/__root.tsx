@@ -17,9 +17,11 @@ import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
+        <h1 className="text-[clamp(3.25rem,16vw,4.5rem)] font-bold leading-none text-foreground">
+          404
+        </h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Página não encontrada</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           A página que procuras não existe ou foi movida.
@@ -45,7 +47,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           Esta página não carregou
@@ -81,7 +83,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       {
         name: "viewport",
-        content: "width=device-width, initial-scale=1, viewport-fit=cover",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
       },
       { title: "AngoStudy — Estuda melhor" },
       {
@@ -89,7 +92,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Agente IA, flashcards, quizzes, pomodoro e notas — tudo guardado no teu dispositivo.",
       },
-      /* tema preto sólido com acento azul */
+      /* tema preto sólido com acento dourado */
       { name: "theme-color", content: "#050505" },
       { name: "color-scheme", content: "dark" },
       { name: "mobile-web-app-capable", content: "yes" },
@@ -139,7 +142,14 @@ function RootComponent() {
       <AppShell>
         <Outlet />
       </AppShell>
-      <Toaster theme="dark" position="bottom-center" />
+      <Toaster
+        theme="dark"
+        position="bottom-center"
+        offset={{ bottom: "calc(var(--shell-tabbar-h) + var(--shell-safe-bottom) + 0.75rem)" }}
+        mobileOffset={{
+          bottom: "calc(var(--shell-tabbar-h) + var(--shell-safe-bottom) + 0.75rem)",
+        }}
+      />
     </QueryClientProvider>
   );
 }

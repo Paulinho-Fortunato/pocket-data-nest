@@ -83,16 +83,19 @@ function Flashcards() {
       {showForm && (
         <div className="panel mb-5 grid gap-2 p-4 md:grid-cols-[1fr_1fr_160px_auto]">
           <Input
+            aria-label="Pergunta do cartão"
             placeholder="Pergunta"
             value={form.q}
             onChange={(e) => setForm({ ...form, q: e.target.value })}
           />
           <Input
+            aria-label="Resposta do cartão"
             placeholder="Resposta"
             value={form.a}
             onChange={(e) => setForm({ ...form, a: e.target.value })}
           />
           <Input
+            aria-label="Disciplina"
             placeholder="Disciplina"
             value={form.deck}
             onChange={(e) => setForm({ ...form, deck: e.target.value })}
@@ -105,12 +108,14 @@ function Flashcards() {
         {decks.map((d) => (
           <button
             key={d}
+            type="button"
+            aria-pressed={d === deck}
             onClick={() => {
               setDeck(d);
               setIdx(0);
               setFlipped(false);
             }}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${d === deck ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground"}`}
+            className={`min-h-11 rounded-full border px-4 py-2 text-xs font-semibold ${d === deck ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground"}`}
           >
             {d}
           </button>
@@ -120,25 +125,29 @@ function Flashcards() {
       {card ? (
         <>
           <button
+            type="button"
             onClick={() => setFlipped((f) => !f)}
             className="block w-full [perspective:1200px]"
-            aria-label="Virar cartão"
+            aria-pressed={flipped}
           >
-            <div
-              className={`flip-3d relative h-72 ${flipped ? "[transform:rotateY(180deg)]" : ""}`}
-            >
-              <div className="panel backface-hidden absolute inset-0 grid place-items-center p-8 text-center">
-                <div>
+            <div className={`flip-3d flip-card ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
+              <div className="panel flip-face backface-hidden" aria-hidden={flipped || undefined}>
+                <div className="min-w-0">
                   <span className="text-xs text-muted-foreground">
                     {card.deck} · {Math.min(idx, list.length - 1) + 1} / {list.length}{" "}
                     {card.known && "· ✓ dominado"}
                   </span>
-                  <p className="mt-4 font-display text-2xl font-semibold">{card.q}</p>
-                  <p className="mt-6 text-xs text-muted-foreground">Clica para virar</p>
+                  <p className="flip-question mt-4 font-display font-semibold">{card.q}</p>
+                  <p className="mt-5 text-xs text-muted-foreground">
+                    {flipped ? "Clica para ver a pergunta" : "Clica para ver a resposta"}
+                  </p>
                 </div>
               </div>
-              <div className="panel backface-hidden absolute inset-0 grid place-items-center border-primary/40 p-8 text-center [transform:rotateY(180deg)]">
-                <p className="text-xl text-primary">{card.a}</p>
+              <div
+                className="panel flip-face backface-hidden border-primary/40 [transform:rotateY(180deg)]"
+                aria-hidden={!flipped || undefined}
+              >
+                <p className="text-lg text-primary sm:text-xl">{card.a}</p>
               </div>
             </div>
           </button>
@@ -166,17 +175,23 @@ function Flashcards() {
       <h2 className="mb-3 mt-10 text-lg font-semibold">Todos os cartões ({list.length})</h2>
       <div className="grid gap-2">
         {list.map((c) => (
-          <div key={c.id} className="panel flex items-center gap-3 p-3 text-sm">
-            <span className={`size-2 rounded-full ${c.known ? "bg-success" : "bg-warning"}`} />
-            <span className="flex-1 truncate">{c.q}</span>
-            <span className="hidden text-xs text-muted-foreground sm:block">{c.deck}</span>
+          <div key={c.id} className="panel flex items-start gap-3 p-3 text-sm">
+            <span
+              className={`mt-0.5 shrink-0 ${c.known ? "text-success" : "text-warning"}`}
+              aria-hidden="true"
+            >
+              {c.known ? <Check className="size-4" /> : <RotateCcw className="size-4" />}
+            </span>
+            <span className="sr-only">{c.known ? "Dominado" : "Por rever"}</span>
+            <span className="min-w-0 flex-1 break-words">{c.q}</span>
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">{c.deck}</span>
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Apagar"
+              aria-label={`Apagar cartão: ${c.q}`}
               onClick={() => setCards((cs) => cs.filter((x) => x.id !== c.id))}
             >
-              <Trash2 />
+              <Trash2 aria-hidden="true" />
             </Button>
           </div>
         ))}

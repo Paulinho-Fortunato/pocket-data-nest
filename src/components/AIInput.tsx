@@ -102,6 +102,19 @@ export function AIInput({
   const [appendixOpen, setAppendixOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const filesRef = useRef<HTMLInputElement>(null);
+  const attachRef = useRef<HTMLButtonElement>(null);
+  const appendixRef = useRef<HTMLDivElement>(null);
+
+  /* ao abrir anexos o foco entra na barra; Escape devolve-o ao botão */
+  useEffect(() => {
+    if (!appendixOpen) return;
+    appendixRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
+  }, [appendixOpen]);
+
+  function closeAppendix() {
+    setAppendixOpen(false);
+    attachRef.current?.focus();
+  }
 
   /* auto-grow do textarea (substitui a animação de typing do original) */
   useEffect(() => {
@@ -139,24 +152,21 @@ export function AIInput({
       />
 
       {suggestions.length > 0 && (
-        <div className="chat-marquee" aria-label="Sugestões rápidas">
-          <ul>
+        <div className="chat-suggestions">
+          <ul aria-label="Sugestões rápidas">
             {suggestions.map((s) => (
-              <li
-                key={s}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  const prompt = s.endsWith(" ") || s.endsWith(":") ? s : `${s} `;
-                  onPickSuggestion?.(prompt);
-                  onChange(prompt);
-                  taRef.current?.focus();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") event.currentTarget.click();
-                }}
-              >
-                {s}
+              <li key={s}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prompt = s.endsWith(" ") || s.endsWith(":") ? s : `${s} `;
+                    onPickSuggestion?.(prompt);
+                    onChange(prompt);
+                    taRef.current?.focus();
+                  }}
+                >
+                  {s}
+                </button>
               </li>
             ))}
           </ul>
@@ -164,40 +174,50 @@ export function AIInput({
       )}
 
       <div className="chat-container">
-        <div
-          className="appendix-bar"
-          data-open={String(appendixOpen)}
-          role="menu"
-          aria-label="Anexar conteúdo"
-          aria-hidden={!appendixOpen}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            data-label="Fechar"
-            aria-label="Fechar anexos"
-            tabIndex={appendixOpen ? 0 : -1}
-            onClick={() => setAppendixOpen(false)}
+        {appendixOpen && (
+          <div
+            ref={appendixRef}
+            id="anexos"
+            className="appendix-bar"
+            data-open="true"
+            role="group"
+            aria-label="Anexar conteúdo"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                closeAppendix();
+              }
+            }}
           >
-            <X height={22} width={22} />
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            data-label="Documento"
-            aria-label="Anexar documento"
-            tabIndex={appendixOpen ? 0 : -1}
-            onClick={() => filesRef.current?.click()}
-          >
-            {icons.files}
-          </button>
-        </div>
+            <button
+              type="button"
+              data-label="Fechar"
+              aria-label="Fechar anexos"
+              onClick={() => closeAppendix()}
+            >
+              <X height={22} width={22} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              data-label="Documento"
+              aria-label="Anexar documento (PDF, texto ou código)"
+              onClick={() => filesRef.current?.click()}
+            >
+              {icons.files}
+            </button>
+          </div>
+        )}
 
-        <div className="chat-wrapper">
+        {/* inert: a barra de anexos cobre o campo; nada atrás dela recebe foco */}
+        <div className="chat-wrapper" inert={appendixOpen || undefined}>
           <textarea
             ref={taRef}
             id="chat-input"
             className="chat-field"
+            aria-label="Mensagem para o tutor"
+            aria-describedby={hint ? "chat-input-hint" : undefined}
+            enterKeyHint="send"
+            autoComplete="off"
             value={value}
             placeholder={placeholder}
             rows={2}
@@ -220,11 +240,13 @@ export function AIInput({
                 <ClipboardPaste className="size-[18px]" />
               </button>
               <button
+                ref={attachRef}
                 type="button"
                 className="icon-drop"
                 data-on={appendixOpen || undefined}
                 aria-label="Anexar documento (PDF, texto ou código)"
                 aria-expanded={appendixOpen}
+                aria-controls={appendixOpen ? "anexos" : undefined}
                 onClick={() => setAppendixOpen((open) => !open)}
               >
                 <svg
@@ -265,35 +287,25 @@ export function AIInput({
               )}
             </div>
             <div className="right-buttons">
-              {loading ? (
-                <button
-                  type="button"
-                  className="send-orb stop"
-                  aria-label="Parar resposta"
-                  onClick={onAbort}
-                >
-                  {icons.stop}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="send-orb"
-                  aria-label="Enviar"
-                  disabled={disabled}
-                  onClick={onSubmit}
-                >
-                  {icons.send}
-                </button>
-              )}
+              {/* um único botão: o foco não se perde ao alternar enviar/parar */}
+              <button
+                type="button"
+                className={loading ? "send-orb stop" : "send-orb"}
+                aria-label={loading ? "Parar resposta" : "Enviar"}
+                disabled={loading ? false : disabled}
+                onClick={loading ? onAbort : onSubmit}
+              >
+                {loading ? icons.stop : icons.send}
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {hint && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <FileText className="size-3 shrink-0" />
-          {hint}
+        <p id="chat-input-hint" className="ai-input-hint">
+          <FileText className="size-3 shrink-0" aria-hidden="true" />
+          <span>{hint}</span>
         </p>
       )}
     </div>

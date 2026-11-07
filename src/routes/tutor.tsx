@@ -188,8 +188,12 @@ function Tutor() {
 
   useEffect(() => {
     // Only follow the stream when the user is already reading the end.
-    if (nearBottomRef.current) scrollToEnd(true);
-  }, [msgs, loading, scrollToEnd]);
+    // Instant while streaming (no repeated smooth animations) and coalesced
+    // into one frame so token updates never thrash the layout.
+    if (!nearBottomRef.current) return;
+    const frame = requestAnimationFrame(() => scrollToEnd(!streaming));
+    return () => cancelAnimationFrame(frame);
+  }, [msgs, loading, streaming, scrollToEnd]);
 
   useEffect(
     () => () => {
@@ -692,98 +696,105 @@ function Tutor() {
           <Trash2 /> Limpar
         </Button>
       </PageHeader>
-      <div className="panel tutor-panel flex h-[calc(100dvh-13rem)] min-h-[520px] max-h-[780px] min-w-0 flex-col overflow-hidden sm:h-[65vh]">
-        <div
-          ref={messagesRef}
-          onScroll={() => {
-            const container = messagesRef.current;
-            if (!container) return;
-            const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
-            nearBottomRef.current = distance < 180;
-            setShowScrollLatest(distance > 180);
-          }}
-          className="tutor-messages min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 sm:p-5"
-          role="log"
-          aria-live="polite"
-          aria-label="Conversa com o tutor"
-        >
-          {msgs.map((m, i) => (
-            <div
-              key={m.id ?? `${i}-${m.role}`}
-              className={`animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-end gap-2 sm:gap-3 ${
-                m.role === "user" ? "flex-row-reverse" : ""
-              }`}
-            >
-              <span
-                className={`grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold sm:size-9 sm:text-[11px] ${
-                  m.role === "user"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-brand text-primary-foreground"
-                }`}
-                aria-hidden="true"
-              >
-                {m.role === "user" ? "EU" : "IA"}
-              </span>
+      <div className="panel tutor-panel">
+        <div className="tutor-scroll">
+          <div
+            ref={messagesRef}
+            onScroll={() => {
+              const container = messagesRef.current;
+              if (!container) return;
+              const distance =
+                container.scrollHeight - container.scrollTop - container.clientHeight;
+              nearBottomRef.current = distance < 180;
+              setShowScrollLatest(distance > 180);
+            }}
+            className="tutor-messages space-y-3 p-3 sm:space-y-4 sm:p-5"
+            role="log"
+            aria-busy={loading}
+            aria-label="Conversa com o tutor"
+          >
+            {msgs.map((m, i) => (
               <div
-                className={`tutor-message-bubble min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${
-                  m.role === "user" ? "tutor-message-user" : "tutor-message-assistant"
+                key={m.id ?? `${i}-${m.role}`}
+                className={`animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-end gap-2 sm:gap-3 ${
+                  m.role === "user" ? "flex-row-reverse" : ""
                 }`}
               >
-                {m.role === "assistant" ? (
-                  <>
-                    <MessageContent
-                      content={m.content}
-                      isStreaming={streaming && m.id === lastAssistantId}
-                    />
-                    {streaming && m.id === lastAssistantId && (
-                      <span className="typing-cursor" aria-hidden="true" />
-                    )}
-                    {!streaming && m.id !== WELCOME_ID && (
-                      <MessageActions
+                <span
+                  className={`grid size-8 shrink-0 place-items-center rounded-full text-[0.65rem] font-bold sm:size-9 sm:text-[0.7rem] ${
+                    m.role === "user"
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-brand text-primary-foreground"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {m.role === "user" ? "EU" : "IA"}
+                </span>
+                <div
+                  className={`tutor-message-bubble min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl px-3 py-2.5 text-sm leading-relaxed sm:max-w-[82%] sm:px-4 sm:py-3 ${
+                    m.role === "user" ? "tutor-message-user" : "tutor-message-assistant"
+                  }`}
+                >
+                  {m.role === "assistant" ? (
+                    <>
+                      <MessageContent
                         content={m.content}
-                        onRegenerate={regenerate}
-                        canRegenerate={Boolean(lastRequestRef.current) && m.id === lastAssistantId}
-                        disabled={loading}
+                        isStreaming={streaming && m.id === lastAssistantId}
                       />
-                    )}
-                  </>
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                )}
+                      {streaming && m.id === lastAssistantId && (
+                        <span className="typing-cursor" aria-hidden="true" />
+                      )}
+                      {!streaming && m.id !== WELCOME_ID && (
+                        <MessageActions
+                          content={m.content}
+                          onRegenerate={regenerate}
+                          canRegenerate={
+                            Boolean(lastRequestRef.current) && m.id === lastAssistantId
+                          }
+                          disabled={loading}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          {loading && !streaming && (
-            <p className="flex items-center gap-2 pl-10 text-sm text-muted-foreground">
-              <span className="flex gap-1">
-                <span className="typing-dot" style={{ animationDelay: "0ms" }} />
-                <span className="typing-dot" style={{ animationDelay: "150ms" }} />
-                <span className="typing-dot" style={{ animationDelay: "300ms" }} />
-              </span>
-              {progress ?? "A organizar uma explicação clara..."}
-            </p>
-          )}
-          {noKey && (
-            <div className="pl-10">
-              <Button asChild size="sm">
-                <Link to="/definicoes">Abrir definições</Link>
-              </Button>
-            </div>
-          )}
-          <div ref={endRef} />
+            ))}
+            {loading && !streaming && (
+              <p className="flex items-center gap-2 pl-10 text-sm text-muted-foreground">
+                <span className="flex gap-1">
+                  <span className="typing-dot" style={{ animationDelay: "0ms" }} />
+                  <span className="typing-dot" style={{ animationDelay: "150ms" }} />
+                  <span className="typing-dot" style={{ animationDelay: "300ms" }} />
+                </span>
+                {progress ?? "A organizar uma explicação clara..."}
+              </p>
+            )}
+            {noKey && (
+              <div className="pl-10">
+                <Button asChild size="sm">
+                  <Link to="/definicoes">Abrir definições</Link>
+                </Button>
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+          <button
+            type="button"
+            className={`scroll-latest ${showScrollLatest ? "is-visible" : ""}`}
+            aria-label="Descer para a mensagem mais recente"
+            aria-hidden={!showScrollLatest}
+            tabIndex={showScrollLatest ? 0 : -1}
+            onClick={() => {
+              nearBottomRef.current = true;
+              scrollToEnd(true);
+            }}
+          >
+            <ArrowDown className="size-4" aria-hidden="true" />
+            <span>Ir para o fim</span>
+          </button>
         </div>
-        <button
-          type="button"
-          className={`scroll-latest ${showScrollLatest ? "is-visible" : ""}`}
-          aria-label="Descer para a mensagem mais recente"
-          onClick={() => {
-            nearBottomRef.current = true;
-            scrollToEnd(true);
-          }}
-        >
-          <ArrowDown className="size-4" />
-          <span>Ir para o fim</span>
-        </button>
         {contextInfo && contextLabel && (
           <p className="context-notice" role="status">
             <FileText className="size-3.5 shrink-0" aria-hidden="true" />
@@ -807,7 +818,9 @@ function Tutor() {
                 <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{attachment.summary.name}</p>
+                <p className="attachment-name font-medium" title={attachment.summary.name}>
+                  {attachment.summary.name}
+                </p>
                 <p className="text-muted-foreground">
                   {describeDocumentSize(attachment.summary)} · {attachment.summary.chunkCount}{" "}
                   trechos
@@ -823,10 +836,10 @@ function Tutor() {
               <button
                 type="button"
                 onClick={detachDocument}
-                className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label="Remover anexo e apagar documento do IndexedDB"
               >
-                <X className="size-3.5" />
+                <X className="size-4" aria-hidden="true" />
               </button>
             </div>
           )}
