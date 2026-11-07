@@ -140,30 +140,92 @@ export const defaultStats: Stats = {
   days: [],
 };
 
-export const defaultCards: Card[] = [
+/**
+ * New users start with **zero** cards. The old build shipped four hard-coded
+ * cards as the initial value, which made the app look pre-filled with content
+ * the user never created.
+ */
+export const defaultCards: Card[] = [];
+
+export const DEMO_DECK = "Exemplo";
+
+/** Optional example deck: only loaded through an explicit button. */
+export const demoCards: Card[] = [
   {
-    id: "c1",
-    deck: "Matemática",
+    id: "demo-c1",
+    deck: DEMO_DECK,
     q: "Qual é a derivada de f(x) = x²?",
     a: "f'(x) = 2x",
     known: false,
+    demo: true,
   },
   {
-    id: "c2",
-    deck: "História",
+    id: "demo-c2",
+    deck: DEMO_DECK,
     q: "Principal causa da Revolução Francesa?",
     a: "Crise financeira, desigualdade social e insatisfação do Terceiro Estado.",
     known: false,
+    demo: true,
   },
   {
-    id: "c3",
-    deck: "Física",
+    id: "demo-c3",
+    deck: DEMO_DECK,
     q: "O que diz a 1.ª Lei de Newton?",
     a: "Um corpo mantém repouso ou movimento uniforme se nenhuma força resultante atuar sobre ele.",
     known: false,
+    demo: true,
   },
-  { id: "c4", deck: "Matemática", q: "Qual é o valor de ∫ 2x dx?", a: "x² + C", known: false },
+  {
+    id: "demo-c4",
+    deck: DEMO_DECK,
+    q: "Qual é o valor de ∫ 2x dx?",
+    a: "x² + C",
+    known: false,
+    demo: true,
+  },
 ];
+
+const LEGACY_DEMO_IDS = new Set(["c1", "c2", "c3", "c4"]);
+
+/**
+ * Safe migration from the old pre-seeded cards:
+ *  - a storage that contains *only* the four legacy demo cards is cleared;
+ *  - legacy demo cards mixed with real cards are flagged (and moved to the
+ *    example deck) so they can be removed without touching real data.
+ * Returns the same array when nothing changes (no render loop).
+ */
+export function migrateCards(cards: Card[]): Card[] {
+  if (cards.length === 0) return cards;
+  const legacy = cards.filter((card) => card.id && LEGACY_DEMO_IDS.has(card.id));
+  if (legacy.length === 0) return cards;
+  if (legacy.length === cards.length) return [];
+
+  let changed = false;
+  const next = cards.map((card) => {
+    if (!card.id || !LEGACY_DEMO_IDS.has(card.id)) return card;
+    changed = true;
+    return {
+      ...card,
+      deck: DEMO_DECK,
+      demo: true,
+      q: demoCards.find((demo) => demo.q === card.q)?.q ?? card.q,
+    };
+  });
+  return changed ? next : cards;
+}
+
+/** True when the card belongs to the optional example deck. */
+export function isDemoCard(card: Card): boolean {
+  return (
+    Boolean(card.demo) ||
+    card.deck === DEMO_DECK ||
+    Boolean(card.id && LEGACY_DEMO_IDS.has(card.id))
+  );
+}
+
+export function demoCardsFor(cards: Card[]): Card[] {
+  return cards.filter(isDemoCard);
+}
 
 /** Deterministic-enough id that never collides with the static demo cards. */
 export const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -219,7 +281,13 @@ export function useStats() {
 
 /** Validated hooks for the other persisted collections. */
 export function useCards() {
-  return usePersistent<Card[]>("cards", defaultCards, CardSchema.array());
+  const [cards, setCards, ready] = usePersistent<Card[]>("cards", defaultCards, CardSchema.array());
+  useEffect(() => {
+    const migrated = migrateCards(cards);
+    if (migrated !== cards) setCards(migrated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards]);
+  return [cards, setCards, ready] as const;
 }
 
 export function useNotes() {

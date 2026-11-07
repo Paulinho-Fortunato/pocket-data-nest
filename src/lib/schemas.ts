@@ -36,6 +36,11 @@ export const CardSchema = z.object({
   a: z.string().trim().min(1, "Resposta vazia").max(MAX_CARD_ANSWER),
   deck: z.string().trim().max(MAX_DECK_NAME).default("Geral"),
   known: z.boolean().default(false),
+  /** True only for cards loaded from the optional example deck. */
+  demo: z.boolean().optional(),
+  /** Where the card came from, e.g. "p. 12" or "Documento: biologia.pdf". */
+  source: z.string().trim().max(200).optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
 });
 
 export const NoteSchema = z.object({
@@ -45,10 +50,21 @@ export const NoteSchema = z.object({
   updated: z.number().finite().nonnegative().default(0),
 });
 
+export const ChatSourceSchema = z.object({
+  name: z.string().trim().max(200),
+  pageStart: z.number().int().positive().optional(),
+  pageEnd: z.number().int().positive().optional(),
+  documentId: z.string().max(80).optional(),
+});
+
 export const ChatMsgSchema = z.object({
   id: z.string().trim().max(64).optional(),
   role: z.enum(["user", "assistant"]),
   content: z.string().max(MAX_CHAT_CONTENT),
+  /** Wall-clock time of the message (survives reloads). */
+  createdAt: z.number().int().nonnegative().optional(),
+  /** Documents/chunks used to answer, shown as "Documento usado". */
+  sources: z.array(ChatSourceSchema).max(8).optional(),
 });
 
 /** ISO `YYYY-MM-DD` activity days. */
@@ -83,6 +99,8 @@ export const DocumentPageSchema = z.object({
   charEnd: z.number().int().nonnegative(),
 });
 
+export const DocumentStatusSchema = z.enum(["queued", "processing", "ready", "partial", "error"]);
+
 export const DocumentChunkSchema = z.object({
   documentId: z.string().min(1),
   chunkId: z.string().min(1),
@@ -93,6 +111,11 @@ export const DocumentChunkSchema = z.object({
   pageStart: z.number().int().positive(),
   pageEnd: z.number().int().positive(),
   hash: z.string().min(8),
+  /** Checksum of the chunk text (same algorithm as `hashText`). */
+  checksum: z.string().default(""),
+  /** Chunk length in characters, kept for quick budget maths. */
+  size: z.number().int().nonnegative().default(0),
+  status: DocumentStatusSchema.default("ready"),
 });
 
 export const DocumentRecordSchema = z.object({
@@ -101,14 +124,61 @@ export const DocumentRecordSchema = z.object({
   name: z.string().min(1).max(260),
   mime: z.string().max(160),
   size: z.number().int().nonnegative(),
+  /** SHA-256 (or FNV fallback) of the file bytes — used to reuse extractions. */
+  hash: z.string().max(128).default(""),
+  status: DocumentStatusSchema.default("ready"),
+  /** Pages successfully read so far (equals totalPages when status is ready). */
+  processedPages: z.number().int().nonnegative().default(0),
   createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative().default(0),
   totalPages: z.number().int().positive(),
   totalChars: z.number().int().nonnegative(),
   truncated: z.literal(false),
   text: z.string(),
   pages: z.array(DocumentPageSchema).min(1),
   chunks: z.array(DocumentChunkSchema),
+  chunkCount: z.number().int().nonnegative().default(0),
   warnings: z.array(z.string()).default([]),
+  error: z.string().max(2_000).optional(),
+});
+
+/** --- AI generation ---------------------------------------------------------------- */
+
+export const GeneratedCardSchema = z.object({
+  question: z.string().trim().min(3).max(2_000),
+  answer: z.string().trim().min(1).max(6_000),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  source: z
+    .object({
+      pageStart: z.number().int().positive().optional(),
+      pageEnd: z.number().int().positive().optional(),
+      quote: z.string().max(600).optional(),
+    })
+    .optional(),
+});
+
+export const GeneratedCardListSchema = z.object({
+  cards: z.array(GeneratedCardSchema).max(100),
+});
+
+export const GeneratedQuestionSchema = z.object({
+  question: z.string().trim().min(3).max(2_000),
+  type: z.enum(["multiple-choice", "true-false", "short-answer"]).default("multiple-choice"),
+  options: z.array(z.string().trim().min(1).max(600)).max(8).optional(),
+  correctAnswer: z.string().trim().min(1).max(2_000),
+  explanation: z.string().max(2_000).optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  source: z
+    .object({
+      pageStart: z.number().int().positive().optional(),
+      pageEnd: z.number().int().positive().optional(),
+      quote: z.string().max(600).optional(),
+    })
+    .optional(),
+});
+
+export const GeneratedQuizSchema = z.object({
+  questions: z.array(GeneratedQuestionSchema).max(100),
 });
 
 /** --- Flashcard generation --------------------------------------------------------- */

@@ -35,3 +35,19 @@ if (typeof Blob !== "undefined" && typeof Blob.prototype.text !== "function") {
     },
   });
 }
+
+// jsdom's File also lacks `.arrayBuffer()`; the upload pipeline uses it to hash bytes.
+if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "function") {
+  Object.defineProperty(Blob.prototype, "arrayBuffer", {
+    configurable: true,
+    writable: true,
+    value: function arrayBuffer(this: Blob) {
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler o Blob."));
+        reader.readAsArrayBuffer(this);
+      });
+    },
+  });
+}

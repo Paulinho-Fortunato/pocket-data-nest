@@ -14,6 +14,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
+import { preferencesBootScript, resolveTheme, usePreferences } from "@/lib/preferences";
+import { registerServiceWorker } from "@/lib/pwa";
 
 function NotFoundComponent() {
   return (
@@ -92,9 +94,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Agente IA, flashcards, quizzes, pomodoro e notas — tudo guardado no teu dispositivo.",
       },
-      /* tema preto sólido com acento dourado */
-      { name: "theme-color", content: "#050505" },
-      { name: "color-scheme", content: "dark" },
+      { name: "color-scheme", content: "dark light" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
@@ -106,6 +106,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png", sizes: "180x180" },
+      {
+        rel: "apple-touch-startup-image",
+        href: "/splash/apple-splash-1170x2532.png",
+        media:
+          "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)",
+      },
+      {
+        rel: "apple-touch-startup-image",
+        href: "/splash/apple-splash-1170x2532.png",
+        media:
+          "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)",
+      },
+      {
+        rel: "apple-touch-startup-image",
+        href: "/splash/apple-splash-2048x2732.png",
+        media:
+          "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)",
+      },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "stylesheet",
@@ -121,9 +142,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-PT" className="dark">
+    <html lang="pt-PT">
       <head>
         <HeadContent />
+        {/* Applies theme/accent/size before paint: no flash of the wrong theme. */}
+        <script dangerouslySetInnerHTML={{ __html: preferencesBootScript() }} />
+        <meta id="theme-color-meta" name="theme-color" content="#0b0b0b" />
       </head>
       <body>
         {children}
@@ -135,6 +159,11 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { preferences } = usePreferences();
+
+  useEffect(() => {
+    void registerServiceWorker();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -143,7 +172,7 @@ function RootComponent() {
         <Outlet />
       </AppShell>
       <Toaster
-        theme="dark"
+        theme={resolveTheme(preferences.theme)}
         position="bottom-center"
         offset={{ bottom: "calc(var(--shell-tabbar-h) + var(--shell-safe-bottom) + 0.75rem)" }}
         mobileOffset={{

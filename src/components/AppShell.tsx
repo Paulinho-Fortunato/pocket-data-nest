@@ -11,16 +11,22 @@ import {
   MoreHorizontal,
   NotebookPen,
   Settings,
+  Sparkles,
   Timer,
+  WifiOff,
   Zap,
 } from "lucide-react";
+import { InstallBanner } from "@/components/InstallBanner";
+import { useOnlineStatus } from "@/lib/pwa";
 import { levelOf, streak, useStats } from "@/lib/store";
 
 const nav = [
   { to: "/", label: "Início", short: "Início", icon: Home },
   { to: "/tutor", label: "Agente IA", short: "Agente", icon: Bot },
   { to: "/flashcards", label: "Flashcards", short: "Cartões", icon: Layers },
+  { to: "/criar-cartoes", label: "Criar cartões com IA", short: "Cartões IA", icon: Sparkles },
   { to: "/quiz", label: "Quiz", short: "Quiz", icon: ListChecks },
+  { to: "/criar-quiz", label: "Criar quiz com IA", short: "Quiz IA", icon: Sparkles },
   { to: "/foco", label: "Modo foco", short: "Foco", icon: Timer },
   { to: "/notas", label: "Notas", short: "Notas", icon: NotebookPen },
   { to: "/progresso", label: "Progresso", short: "Níveis", icon: BarChart3 },
@@ -29,11 +35,12 @@ const nav = [
 ] as const;
 
 /* 4 destinos principais na barra de baixo + "Mais" (estilo app Android) */
-const tabPrimary = [nav[0], nav[1], nav[2], nav[3]];
-const tabOverflow = nav.slice(4);
+const tabPrimary = [nav[0], nav[1], nav[2], nav[4]];
+const tabOverflow = nav.filter((item) => !tabPrimary.includes(item as never));
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { stats } = useStats();
+  const online = useOnlineStatus();
   const [moreOpen, setMoreOpen] = useState(false);
   const { pathname } = useLocation();
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -93,6 +100,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isCurrent = (to: string) =>
     to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`);
 
+  /* O tutor é imersivo: ocupa a altura toda e traz o próprio cabeçalho. */
+  const immersive = pathname === "/tutor";
+
   /* ondinha (ripple) ao tocar num separador — feedback tátil visual */
   const spawnRipple = useCallback((e: PointerEvent<HTMLElement>) => {
     const host = e.currentTarget;
@@ -104,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="app-frame">
+    <div className="app-frame" data-immersive={immersive ? "true" : undefined}>
       <a className="skip-link" href="#conteudo">
         Saltar para o conteúdo
       </a>
@@ -126,6 +136,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Zap className="size-3.5 text-warning" />
             <strong>{stats.xp}</strong> XP · Nv {levelOf(stats.xp)}
           </span>
+          {!online ? (
+            <span className="stat-chip" role="status" aria-label="Sem ligação à internet">
+              <WifiOff className="size-3.5 text-warning" aria-hidden="true" />
+              <span className="hidden sm:inline">Offline</span>
+            </span>
+          ) : null}
           <Link to="/definicoes" className="avatar-chip" aria-label="Perfil e definições">
             <span aria-hidden="true">{initials || "AS"}</span>
           </Link>
@@ -134,6 +150,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* ── Conteúdo ────────────────────────────────────────────────── */}
       <main ref={mainRef} id="conteudo" className="min-w-0 pt-6" tabIndex={-1}>
+        {!immersive ? <InstallBanner /> : null}
         {children}
       </main>
 

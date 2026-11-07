@@ -1,9 +1,11 @@
+import type { z } from "zod";
+
 import {
+  DOCUMENT_SCHEMA_VERSION as SCHEMA_FROM_RECORD,
   DocumentChunkSchema,
   DocumentRecordSchema,
-  DOCUMENT_SCHEMA_VERSION as SCHEMA_FROM_RECORD,
+  DocumentStatusSchema,
 } from "./schemas";
-import type { z } from "zod";
 
 /**
  * Document pipeline: versioned record, deterministic chunking and context
@@ -47,11 +49,16 @@ export type DocumentSummary = {
   name: string;
   mime: string;
   size: number;
+  hash: string;
+  status: z.infer<typeof DocumentStatusSchema>;
+  processedPages: number;
   createdAt: number;
+  updatedAt: number;
   totalPages: number;
   totalChars: number;
   chunkCount: number;
   warnings: string[];
+  error?: string;
 };
 
 /** Stable FNV-1a style checksum (two independent 32-bit lanes → 16 hex chars). */
@@ -155,6 +162,7 @@ export function chunkDocumentText(text: string, options: ChunkOptions): Document
       const pageStart = pageForOffset(pages, chunkStart);
       const pageEnd = pageForOffset(pages, Math.max(chunkStart, chunkEnd - 1));
       const chunkId = `${options.documentId}:${String(index).padStart(4, "0")}`;
+      const checksum = hashText(chunkText);
       chunks.push({
         documentId: options.documentId,
         chunkId,
@@ -164,7 +172,10 @@ export function chunkDocumentText(text: string, options: ChunkOptions): Document
         charEnd: chunkEnd,
         pageStart,
         pageEnd,
-        hash: hashText(chunkText),
+        hash: checksum,
+        checksum,
+        size: chunkText.length,
+        status: "ready",
       });
       index++;
     }
@@ -183,10 +194,15 @@ export function createDocumentRecord(input: {
   name: string;
   mime: string;
   size: number;
-  createdAt?: number;
+  hash?: string;
+  status?: z.infer<typeof DocumentStatusSchema>;
+  processedPages?: number;
+  createdAt?: number | undefined;
+  updatedAt?: number | undefined;
   text: string;
   pages: DocumentPage[];
   warnings?: string[];
+  error?: string;
   chunkSize?: number;
   chunkOverlap?: number;
 }): DocumentRecord {
@@ -205,14 +221,20 @@ export function createDocumentRecord(input: {
     name: input.name,
     mime: input.mime,
     size: input.size,
+    hash: input.hash ?? "",
+    status: input.status ?? "ready",
+    processedPages: input.processedPages ?? pages.length,
     createdAt: input.createdAt ?? Date.now(),
+    updatedAt: input.updatedAt ?? Date.now(),
     totalPages: pages.length,
     totalChars: text.length,
     truncated: false,
     text,
     pages,
     chunks,
+    chunkCount: chunks.length,
     warnings: input.warnings ?? [],
+    ...(input.error ? { error: input.error } : {}),
   };
 }
 
@@ -246,11 +268,16 @@ export function summarizeDocument(record: DocumentRecord): DocumentSummary {
     name: record.name,
     mime: record.mime,
     size: record.size,
+    hash: record.hash,
+    status: record.status,
+    processedPages: record.processedPages,
     createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
     totalPages: record.totalPages,
     totalChars: record.totalChars,
-    chunkCount: record.chunks.length,
+    chunkCount: record.chunkCount || record.chunks.length,
     warnings: record.warnings,
+    ...(record.error ? { error: record.error } : {}),
   };
 }
 
@@ -574,6 +601,9 @@ export async function summarizeHierarchically(
         pageStart: 1,
         pageEnd: 1,
         hash: hashText(part),
+        checksum: hashText(part),
+        size: part.length,
+        status: "ready" as const,
       })),
       batchChars,
     );

@@ -8,6 +8,11 @@ export type MessageActionsProps = {
   onRegenerate?: () => void;
   canRegenerate?: boolean;
   disabled?: boolean;
+  /** Personalization: TTS rate and language. */
+  speechRate?: number;
+  speechLang?: string;
+  /** Hide the spoken-text action when the answer is still streaming. */
+  hideSpeak?: boolean;
 };
 
 /**
@@ -19,6 +24,9 @@ export function MessageActions({
   onRegenerate,
   canRegenerate = false,
   disabled = false,
+  speechRate = 1,
+  speechLang = "pt-PT",
+  hideSpeak = false,
 }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -55,13 +63,13 @@ export function MessageActions({
     // Cancel first so a previous answer is never read on top of this one.
     synth.cancel();
     const utterance = new SpeechSynthesisUtterance(markdownToSpeechText(content));
-    utterance.lang = "pt-PT";
-    utterance.rate = 1;
+    utterance.lang = speechLang;
+    utterance.rate = Math.min(2, Math.max(0.5, speechRate));
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = () => setSpeaking(false);
     setSpeaking(true);
     synth.speak(utterance);
-  }, [content, speaking, speechAvailable]);
+  }, [content, speaking, speechAvailable, speechLang, speechRate]);
 
   return (
     <div className="message-actions">
@@ -91,7 +99,7 @@ export function MessageActions({
           <span>Regenerar</span>
         </button>
       ) : null}
-      {speechAvailable ? (
+      {speechAvailable && !hideSpeak ? (
         <button
           type="button"
           className="message-action"

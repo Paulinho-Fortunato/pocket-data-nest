@@ -420,8 +420,12 @@ export async function testAIConnection(): Promise<{ ok: true } | { ok: false; er
 }
 
 /** Non-streaming call used by flashcards and hierarchical summaries. */
-export async function askAI(messages: ChatMsg[], system = SYSTEM_PROMPT): Promise<string> {
-  return resolveAiTransport().chat(messages, system);
+export async function askAI(
+  messages: ChatMsg[],
+  system = SYSTEM_PROMPT,
+  options: { signal?: AbortSignal } = {},
+): Promise<string> {
+  return resolveAiTransport().chat(messages, system, options.signal);
 }
 
 /**

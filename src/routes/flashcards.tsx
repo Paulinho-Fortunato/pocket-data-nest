@@ -1,12 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Download, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  GraduationCap,
+  Plus,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
 import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { uid, useCards, useStats } from "@/lib/store";
+import { DEMO_DECK, demoCards, isDemoCard, uid, useCards, useStats } from "@/lib/store";
 
 export const Route = createFileRoute("/flashcards")({
   head: () => pageHead("Flashcards", "Prática de recuperação para fixar o que realmente importa."),
@@ -23,7 +33,11 @@ function Flashcards() {
   const { award } = useStats();
 
   const decks = useMemo(() => ["Todos", ...new Set(cards.map((c) => c.deck))], [cards]);
-  const list = deck === "Todos" ? cards : cards.filter((c) => c.deck === deck);
+  const demo = useMemo(() => cards.filter(isDemoCard), [cards]);
+  const realCards = useMemo(() => cards.filter((card) => !isDemoCard(card)), [cards]);
+  /* Example cards never mix with the user's own cards in "Todos". */
+  const list =
+    deck === "Todos" ? realCards : deck === DEMO_DECK ? demo : cards.filter((c) => c.deck === deck);
   const card = list[Math.min(idx, list.length - 1)];
 
   const go = (d: number) => {
@@ -72,11 +86,17 @@ function Flashcards() {
   return (
     <div>
       <PageHeader title="Flashcards" subtitle="Clica no cartão para ver a resposta.">
-        <Button variant="outline" size="sm" onClick={exportDecks}>
-          <Download /> Exportar
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/criar-cartoes">
+            <Sparkles aria-hidden="true" />
+            Criar com IA
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportDecks} disabled={cards.length === 0}>
+          <Download aria-hidden="true" /> Exportar
         </Button>
         <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-          <Plus /> Novo cartão
+          <Plus aria-hidden="true" /> Novo cartão
         </Button>
       </PageHeader>
 
@@ -103,6 +123,83 @@ function Flashcards() {
           <Button onClick={add}>Guardar</Button>
         </div>
       )}
+
+      {realCards.length === 0 && demo.length === 0 ? (
+        <section
+          className="panel mb-5 flex flex-col items-start gap-3 p-5"
+          aria-label="Sem cartões"
+        >
+          <div className="flex items-center gap-2">
+            <GraduationCap className="size-5 text-primary" aria-hidden="true" />
+            <h2 className="font-semibold">Ainda não tens cartões</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Cria cartões a partir de um PDF, de texto colado ou de um tema. Vês a pré-visualização
+            antes de guardar. Também podes escrever os teus cartões à mão.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to="/criar-cartoes">
+                <Sparkles aria-hidden="true" />
+                Criar cartões com IA
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={() => setShowForm(true)}>
+              <Plus aria-hidden="true" />
+              Adicionar manualmente
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCards((current) => [...current, ...demoCards]);
+                setDeck(DEMO_DECK);
+                setIdx(0);
+                toast.info("Deck de exemplo carregado. Podes removê-lo quando quiseres.");
+              }}
+            >
+              Carregar exemplo
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {demo.length > 0 ? (
+        <section className="install-banner mb-4" aria-label="Deck de exemplo">
+          <GraduationCap className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <p>
+            <strong>{demo.length} cartões de exemplo</strong> do deck “{DEMO_DECK}”. Ficam separados
+            dos teus cartões e nunca entram no quiz.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCards((current) => current.filter((item) => !isDemoCard(item)));
+              setDeck("Todos");
+              setIdx(0);
+              toast.success("Cartões de exemplo removidos.");
+            }}
+          >
+            Remover exemplo
+          </Button>
+        </section>
+      ) : realCards.length > 0 ? (
+        <p className="preview-source mb-4">
+          Queres ver como funciona?{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setCards((current) => [...current, ...demoCards]);
+              setDeck(DEMO_DECK);
+              setIdx(0);
+            }}
+          >
+            Carregar deck de exemplo
+          </button>{" "}
+          (fica separado dos teus cartões).
+        </p>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {decks.map((d) => (
@@ -168,11 +265,13 @@ function Flashcards() {
         </>
       ) : (
         <div className="panel p-10 text-center text-muted-foreground">
-          Ainda não tens cartões. Cria o primeiro!
+          {deck === "Todos" ? "Ainda não tens cartões neste deck." : `O deck “${deck}” está vazio.`}
         </div>
       )}
 
-      <h2 className="mb-3 mt-10 text-lg font-semibold">Todos os cartões ({list.length})</h2>
+      <h2 className="mb-3 mt-10 text-lg font-semibold">
+        {deck === "Todos" ? "Os teus cartões" : `Cartões · ${deck}`} ({list.length})
+      </h2>
       <div className="grid gap-2">
         {list.map((c) => (
           <div key={c.id} className="panel flex items-start gap-3 p-3 text-sm">

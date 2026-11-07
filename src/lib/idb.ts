@@ -20,18 +20,21 @@ import {
  */
 
 const DB_NAME = "angostudy-documents";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 const DOCUMENTS = "documents";
 const CHUNKS = "chunks";
+const CHATS = "chats";
+const CHAT_KEY = "current";
 
 type StoredDocument = Omit<DocumentRecord, "chunks">;
 
 type MemoryTable = {
   documents: Map<string, StoredDocument>;
   chunks: Map<string, DocumentChunk[]>;
+  chat: StoredChat | null;
 };
 
-const memory: MemoryTable = { documents: new Map(), chunks: new Map() };
+const memory: MemoryTable = { documents: new Map(), chunks: new Map(), chat: null };
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
@@ -52,12 +55,24 @@ function openDatabase(): Promise<IDBDatabase | null> {
     }
     request.onupgradeneeded = () => {
       const db = request.result;
+      let documents: IDBObjectStore;
       if (!db.objectStoreNames.contains(DOCUMENTS)) {
-        db.createObjectStore(DOCUMENTS, { keyPath: "id" });
+        documents = db.createObjectStore(DOCUMENTS, { keyPath: "id" });
+      } else {
+        documents = request.transaction!.objectStore(DOCUMENTS);
+      }
+      // v2: file-content hash index so an identical upload can reuse an
+      // extraction instead of reading the PDF again.
+      if (!documents.indexNames.contains("hash")) {
+        documents.createIndex("hash", "hash", { unique: false });
       }
       if (!db.objectStoreNames.contains(CHUNKS)) {
         const store = db.createObjectStore(CHUNKS, { keyPath: "chunkId" });
         store.createIndex("documentId", "documentId", { unique: false });
+      }
+      // v3: conversation history lives here (it can grow past localStorage).
+      if (!db.objectStoreNames.contains(CHATS)) {
+        db.createObjectStore(CHATS, { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -154,13 +169,39 @@ export async function listDocuments(): Promise<DocumentSummary[]> {
   const tx = db.transaction(DOCUMENTS, "readonly");
   const stored = (await requestToPromise(tx.objectStore(DOCUMENTS).getAll())) as StoredDocument[];
   return stored
-    .map((document) =>
-      summarizeDocument({
-        ...document,
-        chunks: [],
-      }),
-    )
+    .map((document) => summarizeDocument({ ...document, chunks: [] }))
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
+ * Finds a previously stored document with the same file-content hash.
+ * This is what turns a repeated upload into an instant "reused" result.
+ */
+export async function findDocumentByHash(hash: string): Promise<DocumentRecord | null> {
+  if (!hash) return null;
+  const db = await openDatabase();
+  if (!db) {
+    for (const stored of memory.documents.values()) {
+      if (stored.hash === hash) {
+        return DocumentRecordSchema.parse(
+          migrateDocumentRecord({ ...stored, chunks: memory.chunks.get(stored.id) ?? [] }),
+        );
+      }
+    }
+    return null;
+  }
+  const tx = db.transaction(DOCUMENTS, "readonly");
+  const store = tx.objectStore(DOCUMENTS);
+  let stored: StoredDocument | undefined;
+  try {
+    stored = (await requestToPromise(store.index("hash").get(hash))) as StoredDocument | undefined;
+  } catch {
+    // Index missing (older database): fall back to a full scan of the metadata.
+    const all = (await requestToPromise(store.getAll())) as StoredDocument[];
+    stored = all.find((document) => document.hash === hash);
+  }
+  if (!stored) return null;
+  return loadDocument(stored.id);
 }
 
 export async function deleteDocument(id: string): Promise<void> {
@@ -189,9 +230,55 @@ export async function clearDocuments(): Promise<void> {
   await transactionDone(tx);
 }
 
+type StoredChat = {
+  id: string;
+  messages: unknown[];
+  updatedAt: number;
+};
+
+/**
+ * Saves the conversation history. Only plain data is stored (no API keys, no
+ * model responses from other users) and it never leaves the device.
+ */
+export async function saveChatHistory(messages: unknown[]): Promise<void> {
+  const record: StoredChat = { id: CHAT_KEY, messages, updatedAt: Date.now() };
+  const db = await openDatabase();
+  if (!db) {
+    memory.chat = record;
+    return;
+  }
+  const tx = db.transaction(CHATS, "readwrite");
+  tx.objectStore(CHATS).put(record);
+  await transactionDone(tx);
+}
+
+export async function loadChatHistory(): Promise<{
+  messages: unknown[];
+  updatedAt: number;
+} | null> {
+  const db = await openDatabase();
+  if (!db) return memory.chat;
+  const tx = db.transaction(CHATS, "readonly");
+  const stored = (await requestToPromise(tx.objectStore(CHATS).get(CHAT_KEY))) as
+    StoredChat | undefined;
+  return stored ? { messages: stored.messages, updatedAt: stored.updatedAt } : null;
+}
+
+export async function clearChatHistory(): Promise<void> {
+  const db = await openDatabase();
+  if (!db) {
+    memory.chat = null;
+    return;
+  }
+  const tx = db.transaction(CHATS, "readwrite");
+  tx.objectStore(CHATS).delete(CHAT_KEY);
+  await transactionDone(tx);
+}
+
 /** Test helper: drops the in-memory fallback between test cases. */
 export function __resetMemoryDocuments() {
   memory.documents.clear();
   memory.chunks.clear();
+  memory.chat = null;
   dbPromise = null;
 }

@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/AppShell";
+import { PersonalizationPanel } from "@/components/settings/PersonalizationPanel";
 import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,6 +200,8 @@ function Definicoes() {
   return (
     <div className="max-w-2xl space-y-5">
       <PageHeader title="Definições" subtitle="Tudo fica guardado apenas no teu navegador." />
+
+      <PersonalizationPanel />
 
       <section className="panel space-y-4 p-5">
         <h2 className="font-semibold">Perfil</h2>

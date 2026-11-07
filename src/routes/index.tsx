@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Bot, Layers, ListChecks, Timer, ArrowRight } from "lucide-react";
+import { Bot, Layers, ListChecks, Sparkles, Timer, ArrowRight } from "lucide-react";
 import { pageHead } from "@/lib/page-head";
 import { Button } from "@/components/ui/button";
-import { levelOf, useCards, useStats, XP_PER_LEVEL } from "@/lib/store";
+import { isDemoCard, levelOf, useCards, useStats, XP_PER_LEVEL } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => pageHead("Início", "O teu painel de estudo: progresso, metas e ferramentas."),
@@ -22,6 +22,18 @@ const tools = [
     title: "Flashcards",
     text: "Revê com prática de recuperação.",
   },
+  {
+    to: "/criar-cartoes",
+    icon: Sparkles,
+    title: "Criar cartões com IA",
+    text: "De um PDF, texto colado ou tema.",
+  },
+  {
+    to: "/criar-quiz",
+    icon: Sparkles,
+    title: "Criar quiz com IA",
+    text: "Perguntas validadas com fontes.",
+  },
   { to: "/quiz", icon: ListChecks, title: "Quiz", text: "Descobre onde podes melhorar." },
   { to: "/foco", icon: Timer, title: "Modo foco", text: "Protege o teu tempo de estudo." },
 ] as const;
@@ -30,7 +42,8 @@ function Dashboard() {
   const { stats } = useStats();
   const [cards] = useCards();
   const accuracy = stats.answered ? Math.round((stats.correct / stats.answered) * 100) : 0;
-  const pending = cards.filter((c) => !c.known).length;
+  const ownCards = cards.filter((card) => !isDemoCard(card));
+  const pending = ownCards.filter((c) => !c.known).length;
   const lvlXp = stats.xp % XP_PER_LEVEL;
   const goalPct = Math.min(100, (stats.sessions / stats.weeklyGoal) * 100);
   const date = new Date().toLocaleDateString("pt-PT", {
@@ -46,7 +59,7 @@ function Dashboard() {
       value: `${Math.floor(stats.focusMinutes / 60)}h ${stats.focusMinutes % 60}m`,
       hint: `${stats.sessions} sessões`,
     },
-    { label: "Cartões por rever", value: pending, hint: `${cards.length} no total` },
+    { label: "Cartões por rever", value: pending, hint: `${ownCards.length} no total` },
     { label: `Nível ${levelOf(stats.xp)}`, value: `${lvlXp}`, hint: `/ ${XP_PER_LEVEL} XP` },
   ];
 

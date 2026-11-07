@@ -70,7 +70,50 @@ export type ExtractionErrorCode =
   | "PASSWORD_PROTECTED"
   | "PDF_LOAD_FAILED"
   | "READ_FAILED"
-  | "BINARY_CONTENT";
+  | "BINARY_CONTENT"
+  | "CANCELLED";
+
+/** Progress reported while a document is being read, page by page. */
+export type ExtractionProgress = {
+  stage: "reading" | "opened" | "page" | "text" | "done";
+  /** Pages fully read so far. */
+  pagesDone: number;
+  totalPages: number;
+  chars: number;
+  /** 0–100, honest: derived from pages actually read. */
+  percent: number;
+};
+
+export type ExtractionOptions = {
+  signal?: AbortSignal | undefined;
+  onProgress?: ((progress: ExtractionProgress) => void) | undefined;
+  /** Yield to the event loop between pages so the UI stays responsive. */
+  yieldEvery?: number;
+};
+
+/** Thrown when the caller aborts; the partial text travels in `partial`. */
+export function isCancelled(error: unknown): boolean {
+  return error instanceof DocumentExtractionError && error.code === "CANCELLED";
+}
+
+export function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw new DocumentExtractionError("CANCELLED", "Leitura cancelada pelo utilizador.");
+  }
+}
+
+/** Lets the browser paint and process the cancel button between pages. */
+export function yieldToUi(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof setTimeout === "function") setTimeout(resolve, 0);
+    else resolve();
+  });
+}
+
+function percentOf(done: number, total: number): number {
+  if (!total) return 0;
+  return Math.min(100, Math.round((done / total) * 100));
+}
 
 export type PartialExtraction = {
   text: string;
@@ -122,6 +165,8 @@ export function explainExtractionError(error: unknown): string {
       return "O ficheiro parece binário e não contém texto legível.";
     case "READ_FAILED":
       return "O navegador não conseguiu ler o ficheiro.";
+    case "CANCELLED":
+      return "Leitura cancelada.";
     default:
       return "Não foi possível ler o documento.";
   }
@@ -177,13 +222,35 @@ function joinPageItems(items: PdfTextItemLike[]): string {
 export async function extractPdfDocument(
   doc: PdfDocumentLike,
   meta: { fileName: string; fileSize: number; fileType?: string },
+  options: ExtractionOptions = {},
 ): Promise<ExtractionResult> {
   const totalPages = doc.numPages;
+  const signal = options.signal;
+  const yieldEvery = Math.max(1, options.yieldEvery ?? 3);
   let text = "";
   const pages: DocumentPage[] = [];
   const emptyPages: number[] = [];
   const failedPages: number[] = [];
   const warnings: string[] = [];
+  const report = (stage: ExtractionProgress["stage"], pagesDone: number) => {
+    options.onProgress?.({
+      stage,
+      pagesDone,
+      totalPages,
+      chars: text.length,
+      percent: percentOf(pagesDone, totalPages),
+    });
+  };
+  const partialSnapshot = (): PartialExtraction => ({
+    text,
+    pages: [...pages],
+    readPages: pages.length,
+    totalPages,
+    unreadRange: pages.length + 1 <= totalPages ? { from: pages.length + 1, to: totalPages } : null,
+    charsRead: text.length,
+    charsExpected: null,
+  });
+  report("opened", 0);
 
   let pdfTitle: string | undefined;
   let pdfProducer: string | undefined;
@@ -201,6 +268,9 @@ export async function extractPdfDocument(
   }
 
   for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+    if (signal?.aborted) {
+      throw new DocumentExtractionError("CANCELLED", "Leitura cancelada.", partialSnapshot());
+    }
     let pageText = "";
     try {
       const page = await doc.getPage(pageNumber);
@@ -216,7 +286,14 @@ export async function extractPdfDocument(
     pages.push({ page: pageNumber, text: pageText, charStart, charEnd: text.length });
     // Separator kept outside the page range so offsets stay exact.
     text += "\n\n";
+    report("page", pageNumber);
+    if (signal?.aborted) {
+      throw new DocumentExtractionError("CANCELLED", "Leitura cancelada.", partialSnapshot());
+    }
+    // Give the UI a chance to paint progress and honour a cancel click.
+    if (pageNumber % yieldEvery === 0) await yieldToUi();
   }
+  report("done", totalPages);
 
   if (failedPages.length > 0) {
     warnings.push(
@@ -231,6 +308,18 @@ export async function extractPdfDocument(
       totalPages,
       unreadRange: { from: 1, to: totalPages },
       charsRead: 0,
+      charsExpected: null,
+    });
+  }
+  if (text.trim().length < 20) {
+    // Almost no text layer: be explicit instead of pretending the PDF was read.
+    throw new DocumentExtractionError("NO_TEXT_LAYER", "O PDF não tem texto suficiente.", {
+      text,
+      pages,
+      readPages: pages.length,
+      totalPages,
+      unreadRange: null,
+      charsRead: text.length,
       charsExpected: null,
     });
   }
@@ -263,16 +352,25 @@ export async function extractPdfDocument(
 }
 
 /** Extracts every page of a PDF using pdf.js, loaded on demand (no SSR cost). */
-export async function readPdfDocument(file: File): Promise<ExtractionResult> {
+export async function readPdfDocument(
+  file: File,
+  options: ExtractionOptions = {},
+): Promise<ExtractionResult> {
   let doc: PdfDocumentLike & { destroy?: () => Promise<void> };
+  throwIfAborted(options.signal);
   try {
     const pdfjs = await import("pdfjs-dist");
     const workerModule = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
     pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+    throwIfAborted(options.signal);
+    if (file.size === 0) {
+      throw new DocumentExtractionError("EMPTY_DOCUMENT", "O ficheiro está vazio.");
+    }
     const buffer = await file.arrayBuffer();
     doc = (await pdfjs.getDocument({ data: new Uint8Array(buffer) })
       .promise) as unknown as PdfDocumentLike & { destroy?: () => Promise<void> };
   } catch (error) {
+    if (isCancelled(error)) throw error;
     const message = error instanceof Error ? error.message : "";
     if (/password/i.test(message)) {
       throw new DocumentExtractionError(
@@ -286,18 +384,27 @@ export async function readPdfDocument(file: File): Promise<ExtractionResult> {
     );
   }
   try {
-    return await extractPdfDocument(doc, {
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type || "application/pdf",
-    });
+    return await extractPdfDocument(
+      doc,
+      {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type || "application/pdf",
+      },
+      options,
+    );
   } finally {
     await doc.destroy?.().catch(() => undefined);
   }
 }
 
 /** Reads any supported text-like file (TXT, MD, CSV, JSON, source code). */
-export async function readTextDocument(file: File): Promise<ExtractionResult> {
+export async function readTextDocument(
+  file: File,
+  options: ExtractionOptions = {},
+): Promise<ExtractionResult> {
+  options.onProgress?.({ stage: "reading", pagesDone: 0, totalPages: 1, chars: 0, percent: 0 });
+  throwIfAborted(options.signal);
   let text: string;
   try {
     text = await file.text();
@@ -314,6 +421,14 @@ export async function readTextDocument(file: File): Promise<ExtractionResult> {
   if (!text.trim()) {
     throw new DocumentExtractionError("EMPTY_DOCUMENT", "O ficheiro está vazio.");
   }
+  throwIfAborted(options.signal);
+  options.onProgress?.({
+    stage: "text",
+    pagesDone: 1,
+    totalPages: 1,
+    chars: text.length,
+    percent: 100,
+  });
   const page: DocumentPage = { page: 1, text, charStart: 0, charEnd: text.length };
   return {
     text,
@@ -336,9 +451,12 @@ export async function readTextDocument(file: File): Promise<ExtractionResult> {
 }
 
 /** Extracts a supported document completely (PDF or text-like file). */
-export async function extractDocument(file: File): Promise<ExtractionResult> {
+export async function extractDocument(
+  file: File,
+  options: ExtractionOptions = {},
+): Promise<ExtractionResult> {
   if (file.type === "application/pdf" || PDF_EXTENSIONS.test(file.name)) {
-    return readPdfDocument(file);
+    return readPdfDocument(file, options);
   }
   if (!isAllowedFile(file)) {
     throw new DocumentExtractionError(
@@ -346,7 +464,7 @@ export async function extractDocument(file: File): Promise<ExtractionResult> {
       `Tipo de ficheiro não suportado (${file.type || file.name}).`,
     );
   }
-  return readTextDocument(file);
+  return readTextDocument(file, options);
 }
 
 /** Backwards-compatible helper: returns the full extracted text. */

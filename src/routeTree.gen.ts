@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CriarCartoesRouteImport } from './routes/criar-cartoes'
+import { Route as CriarQuizRouteImport } from './routes/criar-quiz'
 import { Route as DefinicoesRouteImport } from './routes/definicoes'
 import { Route as FlashcardsRouteImport } from './routes/flashcards'
 import { Route as FocoRouteImport } from './routes/foco'
@@ -22,6 +24,16 @@ import { Route as TutorRouteImport } from './routes/tutor'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CriarCartoesRoute = CriarCartoesRouteImport.update({
+  id: '/criar-cartoes',
+  path: '/criar-cartoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CriarQuizRoute = CriarQuizRouteImport.update({
+  id: '/criar-quiz',
+  path: '/criar-quiz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DefinicoesRoute = DefinicoesRouteImport.update({
@@ -67,6 +79,8 @@ const TutorRoute = TutorRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/criar-cartoes': typeof CriarCartoesRoute
+  '/criar-quiz': typeof CriarQuizRoute
   '/definicoes': typeof DefinicoesRoute
   '/flashcards': typeof FlashcardsRoute
   '/foco': typeof FocoRoute
@@ -78,6 +92,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/criar-cartoes': typeof CriarCartoesRoute
+  '/criar-quiz': typeof CriarQuizRoute
   '/definicoes': typeof DefinicoesRoute
   '/flashcards': typeof FlashcardsRoute
   '/foco': typeof FocoRoute
@@ -90,6 +106,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/criar-cartoes': typeof CriarCartoesRoute
+  '/criar-quiz': typeof CriarQuizRoute
   '/definicoes': typeof DefinicoesRoute
   '/flashcards': typeof FlashcardsRoute
   '/foco': typeof FocoRoute
@@ -103,6 +121,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/criar-cartoes'
+    | '/criar-quiz'
     | '/definicoes'
     | '/flashcards'
     | '/foco'
@@ -114,6 +134,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/criar-cartoes'
+    | '/criar-quiz'
     | '/definicoes'
     | '/flashcards'
     | '/foco'
@@ -125,6 +147,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/criar-cartoes'
+    | '/criar-quiz'
     | '/definicoes'
     | '/flashcards'
     | '/foco'
@@ -137,6 +161,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CriarCartoesRoute: typeof CriarCartoesRoute
+  CriarQuizRoute: typeof CriarQuizRoute
   DefinicoesRoute: typeof DefinicoesRoute
   FlashcardsRoute: typeof FlashcardsRoute
   FocoRoute: typeof FocoRoute
@@ -154,6 +180,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/criar-cartoes': {
+      id: '/criar-cartoes'
+      path: '/criar-cartoes'
+      fullPath: '/criar-cartoes'
+      preLoaderRoute: typeof CriarCartoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/criar-quiz': {
+      id: '/criar-quiz'
+      path: '/criar-quiz'
+      fullPath: '/criar-quiz'
+      preLoaderRoute: typeof CriarQuizRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/definicoes': {
@@ -217,6 +257,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CriarCartoesRoute: CriarCartoesRoute,
+  CriarQuizRoute: CriarQuizRoute,
   DefinicoesRoute: DefinicoesRoute,
   FlashcardsRoute: FlashcardsRoute,
   FocoRoute: FocoRoute,
