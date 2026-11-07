@@ -169,6 +169,12 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentResult> {
     maxChars: contextCharBudget(caps),
   });
   sources.push(...built.sources);
+  diag("agent:context", {
+    chars: built.usedChars,
+    messages: built.messages.length,
+    sources: built.sources.length,
+    truncated: built.truncated,
+  });
 
   const planning = shouldPlanTools(options.query, options.documents.length > 0);
   const messages: ChatMsg[] = [...built.messages];

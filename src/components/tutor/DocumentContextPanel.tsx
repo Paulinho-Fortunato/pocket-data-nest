@@ -27,6 +27,7 @@ export type DocumentContextPanelProps = {
     mode: string;
     usedChunks: number;
     totalChunks: number;
+    partial?: boolean;
     pageRanges: { from: number; to: number }[];
   } | null;
 };
@@ -148,9 +149,9 @@ export function DocumentContextPanel({
             {usage ? (
               <p className="preview-source">
                 Modo de contexto: {usage.mode}
-                {usage.usedChunks < usage.totalChunks
-                  ? " — só os trechos relevantes para a pergunta foram enviados ao modelo."
-                  : " — o documento inteiro cabe no contexto."}
+                {usage.partial
+                  ? " — o documento não cabe no contexto deste modelo; foi enviada uma amostra distribuída do início ao fim. Escolhe um modelo com mais contexto para ler tudo."
+                  : " — o documento inteiro cabe no contexto e foi enviado ao modelo."}
               </p>
             ) : null}
 

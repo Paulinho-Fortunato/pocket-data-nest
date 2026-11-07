@@ -37,7 +37,8 @@ import { getYouTubeTranscript } from "@/lib/transcript";
 import { readStore, removeStore, useStats, writeStore, uid } from "@/lib/store";
 import { answerLanguageInstruction, type TutorContextInfo } from "@/lib/tutor-context";
 import { runAgent } from "@/lib/agent/agent";
-import { getModelCapabilities } from "@/lib/agent/model-capabilities";
+import { contextCharBudget, getModelCapabilities } from "@/lib/agent/model-capabilities";
+import { estimateDocumentBudget } from "@/lib/agent/context";
 import { planDocumentContext } from "@/lib/documents";
 
 export const Route = createFileRoute("/tutor")({
@@ -552,10 +553,30 @@ function Tutor() {
       generationTimer.current = startTimer("ai:generation-end");
 
       try {
-        // The UI panel describes the same chunks the agent will receive.
+        const system = [SYSTEM_PROMPT, answerLanguageInstruction(preferences.aiLanguage)]
+          .filter(Boolean)
+          .join("\n\n");
+
+        const history = base
+          .filter((message) => (message.content ?? "").trim().length > 0)
+          .slice(-12)
+          .map(({ role, content }) => ({ role, content }));
+
+        const model = readStore<string>("openrouter_model", "openrouter/auto");
+        const caps = getModelCapabilities(model);
+
+        // The UI panel describes the same chunks the agent will receive, using
+        // the same model budget (not a fixed 12k that made files look partial).
         let info: TutorContextInfo | null = null;
         if (request.documentId && document?.id === request.documentId) {
-          const plan = planDocumentContext(document, request.text);
+          const plan = planDocumentContext(document, request.text, {
+            maxChars: estimateDocumentBudget({
+              maxChars: contextCharBudget(caps),
+              system,
+              history,
+              query: request.text,
+            }),
+          });
           const ranges: { from: number; to: number }[] = [];
           for (const chunk of plan.chunks) {
             const last = ranges[ranges.length - 1];
@@ -579,20 +600,9 @@ function Tutor() {
           setContextInfo(info);
         }
 
-        const system = [SYSTEM_PROMPT, answerLanguageInstruction(preferences.aiLanguage)]
-          .filter(Boolean)
-          .join("\n\n");
-
-        const history = base
-          .filter((message) => (message.content ?? "").trim().length > 0)
-          .slice(-12)
-          .map(({ role, content }) => ({ role, content }));
-
         const agentDocuments = await loadAgentDocuments(
           document && document.status !== "error" ? document : null,
         );
-        const model = readStore<string>("openrouter_model", "openrouter/auto");
-        const caps = getModelCapabilities(model);
         setGeneration({ state: "preparing", label: "A analisar a pergunta…" });
 
         const result = await runAgent({
@@ -1100,6 +1110,7 @@ function Tutor() {
                       mode: contextInfo.mode,
                       usedChunks: contextInfo.usedChunks,
                       totalChunks: contextInfo.totalChunks,
+                      partial: contextInfo.partial,
                       pageRanges: contextInfo.pageRanges,
                     }
                   : null
