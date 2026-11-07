@@ -64,6 +64,17 @@ describe("document storage", () => {
     expect(await listDocuments()).toEqual([]);
   });
 
+  it("replaces the chunk set of an existing document", async () => {
+    const doc = record("replace-me");
+    await saveDocument(doc);
+    expect((await loadDocument(doc.id))?.chunks.length).toBeGreaterThan(0);
+
+    await saveDocument({ ...doc, chunks: [] });
+    const loaded = await loadDocument(doc.id);
+    expect(loaded?.chunks).toEqual([]);
+    expect(loaded?.totalChars).toBe(doc.totalChars);
+  });
+
   it("rejects an invalid record instead of persisting it", async () => {
     await expect(saveDocument({ ...record(), totalChars: -1 } as never)).rejects.toThrow();
   });

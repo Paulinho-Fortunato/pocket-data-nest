@@ -60,7 +60,12 @@ export const ChatSourceSchema = z.object({
 export const ChatMsgSchema = z.object({
   id: z.string().trim().max(64).optional(),
   role: z.enum(["user", "assistant"]),
-  content: z.string().max(MAX_CHAT_CONTENT),
+  /**
+   * Long streamed answers are legitimate. Truncate instead of rejecting the
+   * message: rejecting one message used to invalidate the whole conversation
+   * on the next reload (see `chat-store.validated`).
+   */
+  content: z.string().transform((value) => value.slice(0, MAX_CHAT_CONTENT)),
   /** Wall-clock time of the message (survives reloads). */
   createdAt: z.number().int().nonnegative().optional(),
   /** Documents/chunks used to answer, shown as "Documento usado". */
@@ -86,7 +91,12 @@ export const StatsSchema = z.object({
 export const StatsListSchema = StatsSchema;
 export const CardsSchema = z.array(CardSchema).max(MAX_CARDS);
 export const NotesSchema = z.array(NoteSchema).max(MAX_NOTES);
-export const ChatSchema = z.array(ChatMsgSchema).max(MAX_MESSAGES);
+/**
+ * The array itself is intentionally unbounded here. The history loader keeps
+ * the newest `MAX_MESSAGES` items **before** validating them; applying `.max`
+ * at this layer made a 501st message erase the entire stored conversation.
+ */
+export const ChatSchema = z.array(ChatMsgSchema);
 export const ModelSchema = z.string().trim().min(1).max(MAX_MODEL_ID);
 export const ApiKeySchema = z.string().max(MAX_API_KEY_LENGTH);
 
@@ -214,6 +224,10 @@ export const BackupEnvelopeSchema = z.object({
   schemaVersion: z.number().int().min(1).max(999),
   exportedAt: z.string().max(40).optional(),
   data: z.record(z.string(), z.unknown()),
+  /** Conversation IDB payload (the legacy `angostudy:chat` key is not enough). */
+  chat: ChatSchema.optional(),
+  /** Extracted documents live in IndexedDB, not in localStorage. */
+  documents: z.array(DocumentRecordSchema).max(200).optional(),
 });
 
 export type BackupEnvelope = z.infer<typeof BackupEnvelopeSchema>;

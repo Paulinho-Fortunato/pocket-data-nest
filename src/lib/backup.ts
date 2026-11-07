@@ -1,11 +1,26 @@
 import {
   BACKUP_KEY_SCHEMAS,
   BackupEnvelopeSchema,
+  ChatMsgSchema,
+  ChatSchema,
   DATA_SCHEMA_VERSION,
+  DocumentRecordSchema,
+  MAX_MESSAGES,
   SECRET_KEYS,
   type BackupEnvelope,
   type BackupKey,
+  type ParsedChatMsg,
 } from "./schemas";
+import {
+  clearChatHistory,
+  clearDocuments,
+  listDocuments,
+  loadChatHistory,
+  loadDocument,
+  saveChatHistory,
+  saveDocument,
+} from "./idb";
+import type { DocumentRecord } from "./documents";
 import { readStore, removeStore, STORAGE_PREFIX, writeStore } from "./store";
 
 /**
@@ -20,6 +35,11 @@ import { readStore, removeStore, STORAGE_PREFIX, writeStore } from "./store";
 
 export const BACKUP_APP = "AngoStudy";
 export const BACKUP_TYPE = "backup";
+/** Keep exports re-importable; the UI rejects larger files for the same reason. */
+export const MAX_BACKUP_FILE_BYTES = 64 * 1024 * 1024;
+/** Text is duplicated in `text`, `pages` and `chunks`; stay well below the cap. */
+const MAX_BACKUP_DOCUMENT_CHARS = 12_000_000;
+const MAX_BACKUP_DOCUMENTS = 200;
 
 export const ALLOWED_BACKUP_KEYS = Object.keys(BACKUP_KEY_SCHEMAS) as BackupKey[];
 
@@ -33,7 +53,7 @@ export type BackupBuildResult = {
   skipped: string[];
 };
 
-export function buildBackup(now: Date = new Date()): BackupBuildResult {
+export async function buildBackup(now: Date = new Date()): Promise<BackupBuildResult> {
   const data: Record<string, unknown> = {};
   const skipped: string[] = [];
   for (const key of ALLOWED_BACKUP_KEYS) {
@@ -46,12 +66,60 @@ export function buildBackup(now: Date = new Date()): BackupBuildResult {
       skipped.push(key.replace(STORAGE_PREFIX, ""));
     }
   }
+
+  // The modern conversation and documents live in IndexedDB. Exporting only
+  // localStorage made a "full" backup silently omit both.
+  let chat: ParsedChatMsg[] | undefined;
+  try {
+    const stored = await loadChatHistory();
+    if (stored) {
+      const parsedChat = ChatSchema.safeParse(stored.messages);
+      if (parsedChat.success) chat = parsedChat.data;
+      else skipped.push("conversas");
+    } else {
+      // No stored history means an empty backup, not "unknown".
+      chat = [];
+    }
+  } catch {
+    skipped.push("conversas");
+  }
+
+  let documents: DocumentRecord[] | undefined;
+  try {
+    const summaries = await listDocuments();
+    documents = [];
+    let documentChars = 0;
+    for (const summary of summaries.slice(0, MAX_BACKUP_DOCUMENTS)) {
+      try {
+        const document = await loadDocument(summary.id);
+        if (!document) continue;
+        if (documentChars + document.totalChars > MAX_BACKUP_DOCUMENT_CHARS) {
+          skipped.push(`documento:${summary.name} (demasiado grande)`);
+          continue;
+        }
+        documentChars += document.totalChars;
+        documents.push(document);
+      } catch {
+        skipped.push(`documento:${summary.name}`);
+      }
+    }
+    if (summaries.length > MAX_BACKUP_DOCUMENTS) {
+      skipped.push(`documentos acima de ${MAX_BACKUP_DOCUMENTS}`);
+    }
+  } catch {
+    skipped.push("documentos");
+  }
+
   const parsed = BackupEnvelopeSchema.safeParse({
     app: BACKUP_APP,
     type: BACKUP_TYPE,
     schemaVersion: DATA_SCHEMA_VERSION,
     exportedAt: now.toISOString(),
     data,
+    // Include empty arrays explicitly: on "replace" they mean "the backup has
+    // no chat/documents", so the target's old data must be cleared too.
+    ...(chat !== undefined ? { chat } : {}),
+    ...(documents !== undefined ? { documents } : {}),
   });
   const envelope: BackupEnvelope = parsed.success
     ? parsed.data
@@ -110,6 +178,8 @@ export type ParsedBackup = {
   ok: true;
   envelope: BackupEnvelope;
   values: BackupData;
+  chat: ParsedChatMsg[] | undefined;
+  documents: DocumentRecord[] | undefined;
   warnings: string[];
   migratedFrom: number;
 };
@@ -204,7 +274,17 @@ export function parseBackup(raw: string): ParsedBackup | BackupFailure {
     };
   }
 
-  return { ok: true, envelope: envelope.data, values, warnings, migratedFrom };
+  return {
+    ok: true,
+    envelope: envelope.data,
+    values,
+    // Keep the same bounded window the live history uses, even for hand-made
+    // backups with far more than MAX_MESSAGES entries.
+    chat: envelope.data.chat?.slice(-MAX_MESSAGES),
+    documents: envelope.data.documents,
+    warnings,
+    migratedFrom,
+  };
 }
 
 function mergeStats(current: unknown, incoming: unknown): unknown {
@@ -283,7 +363,21 @@ export function mergeBackupValues(values: BackupData, strategy: MergeStrategy): 
   const incomingChat = values["angostudy:chat"];
   if (incomingChat !== undefined) {
     const currentChat = readStore<unknown[]>("chat", []);
-    merged["angostudy:chat"] = [...currentChat, ...(incomingChat as unknown[])].slice(-500);
+    const seen = new Set<string>();
+    const combined: unknown[] = [];
+    for (const message of [...currentChat, ...(incomingChat as unknown[])]) {
+      const record = message as { id?: unknown; role?: unknown; content?: unknown };
+      const key =
+        typeof record.id === "string"
+          ? `id:${record.id}`
+          : `${String(record.role)}:${String(record.content)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      combined.push(message);
+    }
+    // Legacy localStorage chat; the modern history lives in IndexedDB and is
+    // merged separately in `applyBackup`.
+    merged["angostudy:chat"] = combined.slice(-MAX_MESSAGES);
   }
 
   const incomingModel = values["angostudy:openrouter_model"];
@@ -297,33 +391,156 @@ export function mergeBackupValues(values: BackupData, strategy: MergeStrategy): 
 
 export type ApplyBackupResult = {
   written: string[];
+  failed: string[];
   secretKeysPreserved: boolean;
+  chatRestored: number;
+  documentsRestored: number;
+  errors: string[];
 };
 
-/** Writes validated values to localStorage. Secrets are always untouched. */
-export function applyBackup(values: BackupData, strategy: MergeStrategy): ApplyBackupResult {
+export type ApplyBackupOptions = {
+  chat?: ParsedChatMsg[] | undefined;
+  documents?: DocumentRecord[] | undefined;
+};
+
+/** Writes validated values to localStorage and IDB. Secrets are always untouched. */
+export async function applyBackup(
+  values: BackupData,
+  strategy: MergeStrategy,
+  options: ApplyBackupOptions = {},
+): Promise<ApplyBackupResult> {
   const merged = mergeBackupValues(values, strategy);
   const written: string[] = [];
+  const failed: string[] = [];
+  const errors: string[] = [];
+
   for (const key of ALLOWED_BACKUP_KEYS) {
     if (!(key in merged)) continue;
     const schema = BACKUP_KEY_SCHEMAS[key];
     const parsed = schema.safeParse(merged[key]);
-    if (!parsed.success) continue;
-    writeStore(key.replace(STORAGE_PREFIX, ""), parsed.data);
-    written.push(key);
+    if (!parsed.success) {
+      failed.push(key);
+      errors.push(`Chave inválida: ${key.replace(STORAGE_PREFIX, "")}`);
+      continue;
+    }
+    if (writeStore(key.replace(STORAGE_PREFIX, ""), parsed.data)) written.push(key);
+    else {
+      failed.push(key);
+      errors.push(`Não foi possível guardar: ${key.replace(STORAGE_PREFIX, "")}`);
+    }
   }
-  return { written, secretKeysPreserved: true };
+
+  // Replace must actually remove keys that are absent from the backup. Do it
+  // only after the incoming values were written, and never touch the secret.
+  if (strategy === "replace") {
+    for (const key of ALLOWED_BACKUP_KEYS) {
+      if (!(key in values)) removeStore(key.replace(STORAGE_PREFIX, ""));
+    }
+  }
+
+  let chatRestored = 0;
+  if (options.chat !== undefined) {
+    try {
+      const parsedChat = ChatSchema.safeParse(options.chat);
+      if (!parsedChat.success) {
+        errors.push("As conversas do backup são inválidas.");
+      } else {
+        let nextChat = parsedChat.data.slice(-MAX_MESSAGES);
+        if (strategy === "replace") {
+          await clearChatHistory();
+          // The legacy localStorage mirror must be removed as well, otherwise
+          // the next load would migrate it back into an empty history.
+          removeStore("chat");
+        } else if (nextChat.length > 0) {
+          const stored = await loadChatHistory();
+          // Validate item by item: one corrupt stored message must not discard
+          // the rest of the current conversation during a merge.
+          const current: ParsedChatMsg[] = [];
+          if (stored) {
+            for (const message of stored.messages.slice(-MAX_MESSAGES)) {
+              const parsedMessage = ChatMsgSchema.safeParse(message);
+              if (parsedMessage.success) current.push(parsedMessage.data);
+            }
+          }
+          const seen = new Set<string>();
+          const merged: ParsedChatMsg[] = [];
+          for (const message of [...current, ...nextChat]) {
+            const key = message.id ?? `${message.role}:${message.content}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(message);
+          }
+          nextChat = merged.slice(-MAX_MESSAGES);
+        }
+        if (nextChat.length > 0) {
+          await saveChatHistory(nextChat);
+          chatRestored = nextChat.length;
+        }
+      }
+    } catch (error) {
+      errors.push(
+        `Não foi possível restaurar as conversas: ${
+          error instanceof Error ? error.message : "erro desconhecido"
+        }`,
+      );
+    }
+  }
+
+  let documentsRestored = 0;
+  if (options.documents !== undefined) {
+    try {
+      if (strategy === "replace") await clearDocuments();
+      for (const document of options.documents) {
+        const parsedDocument = DocumentRecordSchema.safeParse(document);
+        if (!parsedDocument.success) {
+          errors.push(`Documento inválido: ${document.name ?? "(sem nome)"}`);
+          continue;
+        }
+        try {
+          await saveDocument(parsedDocument.data);
+          documentsRestored++;
+        } catch (error) {
+          errors.push(
+            `Não foi possível restaurar ${parsedDocument.data.name}: ${
+              error instanceof Error ? error.message : "erro desconhecido"
+            }`,
+          );
+        }
+      }
+    } catch (error) {
+      errors.push(
+        `Não foi possível restaurar os documentos: ${
+          error instanceof Error ? error.message : "erro desconhecido"
+        }`,
+      );
+    }
+  }
+
+  return {
+    written,
+    failed,
+    secretKeysPreserved: true,
+    chatRestored,
+    documentsRestored,
+    errors,
+  };
 }
 
 /** Human readable preview shown before the user confirms the import. */
-export function describeBackup(values: BackupData): string[] {
+export function describeBackup(
+  values: BackupData,
+  chatFromIdb?: ParsedChatMsg[] | undefined,
+  documents?: DocumentRecord[] | undefined,
+): string[] {
   const lines: string[] = [];
   const cards = values["angostudy:cards"];
   if (Array.isArray(cards)) lines.push(`${cards.length} flashcards`);
   const notes = values["angostudy:notes"];
   if (Array.isArray(notes)) lines.push(`${notes.length} notas`);
-  const chat = values["angostudy:chat"];
-  if (Array.isArray(chat)) lines.push(`${chat.length} mensagens`);
+  const legacyChat = values["angostudy:chat"];
+  const chatCount = chatFromIdb?.length ?? (Array.isArray(legacyChat) ? legacyChat.length : 0);
+  if (chatCount > 0) lines.push(`${chatCount} mensagens`);
+  if (documents && documents.length > 0) lines.push(`${documents.length} documentos`);
   if (values["angostudy:stats"]) lines.push("progresso");
   if (values["angostudy:openrouter_model"]) lines.push("modelo de IA");
   return lines;

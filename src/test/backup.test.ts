@@ -17,6 +17,15 @@ import {
   StatsSchema,
 } from "../lib/schemas";
 import { readValidated, writeValidated } from "../lib/store";
+import {
+  __resetMemoryDocuments,
+  clearChatHistory,
+  loadChatHistory,
+  loadDocument,
+  saveChatHistory,
+  saveDocument,
+} from "../lib/idb";
+import { createDocumentRecord } from "../lib/documents";
 
 const stats = {
   name: "Ana",
@@ -48,7 +57,24 @@ function envelope(data: Record<string, unknown>, schemaVersion = DATA_SCHEMA_VER
 
 beforeEach(() => {
   localStorage.clear();
+  __resetMemoryDocuments();
 });
+
+function chatMessage(id: string, content: string) {
+  return { id, role: "user" as const, content, createdAt: 1 };
+}
+
+function documentRecord(id = "doc-1") {
+  const text = "Conteúdo de estudo suficiente para um chunk. ".repeat(20);
+  return createDocumentRecord({
+    id,
+    name: `${id}.md`,
+    mime: "text/markdown",
+    size: text.length,
+    text,
+    pages: [{ page: 1, text, charStart: 0, charEnd: text.length }],
+  });
+}
 
 describe("Zod schemas", () => {
   it("accepts valid data and rejects broken shapes", () => {
@@ -85,12 +111,12 @@ describe("Zod schemas", () => {
 });
 
 describe("buildBackup", () => {
-  it("never exports the OpenRouter key", () => {
+  it("never exports the OpenRouter key", async () => {
     localStorage.setItem("angostudy:openrouter_key", JSON.stringify("sk-or-secret"));
     localStorage.setItem("angostudy:stats", JSON.stringify(stats));
     localStorage.setItem("angostudy:cards", JSON.stringify(cards));
 
-    const { envelope: built } = buildBackup();
+    const { envelope: built } = await buildBackup();
     const serialized = serializeBackup({ envelope: built, skipped: [] });
 
     expect(serialized).not.toContain("sk-or-secret");
@@ -165,17 +191,17 @@ describe("parseBackup", () => {
 });
 
 describe("applyBackup", () => {
-  it("replaces data when asked to", () => {
+  it("replaces data when asked to", async () => {
     localStorage.setItem("angostudy:cards", JSON.stringify([cards[0]]));
     const parsed = parseBackup(envelope({ "angostudy:cards": cards }));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
 
-    applyBackup(parsed.values, "replace");
+    await applyBackup(parsed.values, "replace");
     expect(JSON.parse(localStorage.getItem("angostudy:cards") ?? "[]")).toHaveLength(2);
   });
 
-  it("merges cards by id and keeps the highest progress", () => {
+  it("merges cards by id and keeps the highest progress", async () => {
     localStorage.setItem("angostudy:cards", JSON.stringify([cards[0]]));
     localStorage.setItem(
       "angostudy:stats",
@@ -193,7 +219,7 @@ describe("applyBackup", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
 
-    applyBackup(parsed.values, "merge");
+    await applyBackup(parsed.values, "merge");
 
     const storedCards = JSON.parse(localStorage.getItem("angostudy:cards") ?? "[]");
     expect(storedCards.map((card: { id: string }) => card.id).sort()).toEqual(["a1", "a2"]);
@@ -209,8 +235,52 @@ describe("applyBackup", () => {
     );
   });
 
-  it("never writes the API key, even if it slipped into the values", () => {
-    const result = applyBackup(
+  it("restores chat and documents from IndexedDB and replaces the target", async () => {
+    await saveChatHistory([chatMessage("old", "antiga")]);
+    await saveDocument(documentRecord("old-doc"));
+
+    await saveChatHistory([chatMessage("new", "nova")]);
+    await saveDocument(documentRecord("new-doc"));
+    const built = await buildBackup();
+
+    await clearChatHistory();
+    await saveChatHistory([chatMessage("target", "a substituir")]);
+    await saveDocument(documentRecord("target-doc"));
+
+    const result = await applyBackup(built.envelope.data, "replace", {
+      chat: built.envelope.chat,
+      documents: built.envelope.documents,
+    });
+
+    expect(result.chatRestored).toBe(1);
+    expect(result.documentsRestored).toBe(2);
+    expect((await loadChatHistory())?.messages).toEqual([chatMessage("new", "nova")]);
+    expect(await loadDocument("target-doc")).toBeNull();
+    expect(await loadDocument("new-doc")).not.toBeNull();
+  });
+
+  it("clears chat and documents when a replace backup has no data", async () => {
+    const built = await buildBackup();
+    expect(built.envelope.chat).toEqual([]);
+    expect(built.envelope.documents).toEqual([]);
+
+    await saveChatHistory([chatMessage("old", "antiga")]);
+    await saveDocument(documentRecord("old-doc"));
+    localStorage.setItem("angostudy:chat", JSON.stringify([chatMessage("legacy", "antiga")]));
+
+    const result = await applyBackup(built.envelope.data, "replace", {
+      chat: built.envelope.chat,
+      documents: built.envelope.documents,
+    });
+    expect(result.chatRestored).toBe(0);
+    expect(result.documentsRestored).toBe(0);
+    expect(await loadChatHistory()).toBeNull();
+    expect(localStorage.getItem("angostudy:chat")).toBeNull();
+    expect(await loadDocument("old-doc")).toBeNull();
+  });
+
+  it("never writes the API key, even if it slipped into the values", async () => {
+    const result = await applyBackup(
       {
         "angostudy:stats": stats,
         "angostudy:openrouter_key": "sk-or-secret",
@@ -225,7 +295,7 @@ describe("applyBackup", () => {
     const message = { id: "m1", role: "user" as const, content: "olá" };
     localStorage.setItem("angostudy:chat", JSON.stringify([message]));
     const merged = mergeBackupValues({ "angostudy:chat": [message] }, "merge");
-    expect(merged["angostudy:chat"]).toHaveLength(2);
+    expect(merged["angostudy:chat"]).toHaveLength(1);
   });
 });
 

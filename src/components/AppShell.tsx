@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AiLogo } from "@/components/AiLogo";
 import { InstallBanner } from "@/components/InstallBanner";
+import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/pwa";
 import { levelOf, streak, useStats } from "@/lib/store";
 
@@ -54,6 +55,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  useEffect(() => {
+    const onStorageError = () => {
+      toast.error("Não foi possível guardar no dispositivo", {
+        id: "storage-error",
+        description:
+          "O espaço do navegador está cheio ou o armazenamento está bloqueado. Exporta uma cópia e liberta espaço.",
+        duration: 8000,
+      });
+    };
+    window.addEventListener("angostudy-storage-error", onStorageError);
+    return () => window.removeEventListener("angostudy-storage-error", onStorageError);
+  }, []);
 
   /* sheet "Mais": foco entra no diálogo, Escape fecha, Tab fica dentro */
   useEffect(() => {

@@ -36,13 +36,16 @@ import {
   buildBackup,
   deleteAllAppData,
   describeBackup,
+  MAX_BACKUP_FILE_BYTES,
   parseBackup,
   serializeBackup,
   type BackupData,
   type MergeStrategy,
 } from "@/lib/backup";
-import { clearDocuments } from "@/lib/idb";
+import { clearChatHistory, clearDocuments } from "@/lib/idb";
 import { MODEL_GROUPS } from "@/lib/model-catalog";
+import type { ParsedChatMsg } from "@/lib/schemas";
+import type { DocumentRecord } from "@/lib/documents";
 import { readStore, useStats, writeStore } from "@/lib/store";
 
 export const Route = createFileRoute("/definicoes")({
@@ -52,6 +55,8 @@ export const Route = createFileRoute("/definicoes")({
 
 type ImportPreview = {
   values: BackupData;
+  chat?: ParsedChatMsg[];
+  documents?: DocumentRecord[];
   warnings: string[];
   lines: string[];
 };
@@ -125,25 +130,35 @@ function Definicoes() {
     toast.success("Chave OpenRouter removida deste navegador.");
   }
 
-  function backup() {
-    const { envelope, skipped } = buildBackup();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(
-      new Blob([serializeBackup({ envelope, skipped })], { type: "application/json" }),
-    );
-    a.download = `angostudy-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast.success("Dados exportados. A chave OpenRouter não foi incluída.", {
-      description:
-        skipped.length > 0
-          ? `Chaves ignoradas por estarem corrompidas: ${skipped.join(", ")}.`
-          : undefined,
-    });
+  async function backup() {
+    try {
+      const { envelope, skipped } = await buildBackup();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(
+        new Blob([serializeBackup({ envelope, skipped })], { type: "application/json" }),
+      );
+      a.download = `angostudy-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Dados exportados. A chave OpenRouter não foi incluída.", {
+        description:
+          skipped.length > 0
+            ? `Itens ignorados (demasiado grandes ou corrompidos): ${skipped.join(", ")}.`
+            : undefined,
+      });
+    } catch (error) {
+      toast.error("Não foi possível exportar os dados.", {
+        description: error instanceof Error ? error.message : "Erro de armazenamento.",
+      });
+    }
   }
 
   async function readBackup(f?: File) {
     if (!f) return;
+    if (f.size > MAX_BACKUP_FILE_BYTES) {
+      toast.error("Esta cópia é demasiado grande para importar neste dispositivo.");
+      return;
+    }
     let raw: string;
     try {
       raw = await f.text();
@@ -160,19 +175,31 @@ function Definicoes() {
     for (const warning of parsed.warnings) toast.warning(warning);
     setImportPreview({
       values: parsed.values,
+      ...(parsed.chat ? { chat: parsed.chat } : {}),
+      ...(parsed.documents ? { documents: parsed.documents } : {}),
       warnings: parsed.warnings,
-      lines: describeBackup(parsed.values),
+      lines: describeBackup(parsed.values, parsed.chat, parsed.documents),
     });
   }
 
-  function confirmImport() {
+  async function confirmImport() {
     if (!importPreview) return;
     try {
-      const result = applyBackup(importPreview.values, strategy);
-      toast.success(
-        `Cópia importada (${strategy === "merge" ? "juntar" : "substituir"}): ${result.written.length} chaves.`,
-        { description: "A chave OpenRouter nunca é importada." },
-      );
+      const result = await applyBackup(importPreview.values, strategy, {
+        ...(importPreview.chat ? { chat: importPreview.chat } : {}),
+        ...(importPreview.documents ? { documents: importPreview.documents } : {}),
+      });
+      if (result.failed.length > 0 || result.errors.length > 0) {
+        toast.warning(
+          `Cópia importada com avisos: ${result.written.length} chaves, ${result.chatRestored} mensagens e ${result.documentsRestored} documentos.`,
+          { description: result.errors.slice(0, 2).join(" "), duration: 10000 },
+        );
+      } else {
+        toast.success(
+          `Cópia importada (${strategy === "merge" ? "juntar" : "substituir"}): ${result.written.length} chaves, ${result.chatRestored} mensagens e ${result.documentsRestored} documentos.`,
+          { description: "A chave OpenRouter nunca é importada." },
+        );
+      }
       setImportPreview(null);
       setTimeout(() => location.reload(), 800);
     } catch (error) {
@@ -186,7 +213,18 @@ function Definicoes() {
     if (!confirm("Apagar todos os dados do AngoStudy neste dispositivo? Esta ação é irreversível."))
       return;
     deleteAllAppData();
-    await clearDocuments().catch(() => undefined);
+    // Chat and documents live in IndexedDB; the pending tutor→creation handoff
+    // lives in sessionStorage. A "delete all" that leaves them behind is a
+    // privacy bug, not a partial reset.
+    await Promise.all([
+      clearDocuments().catch(() => undefined),
+      clearChatHistory().catch(() => undefined),
+    ]);
+    try {
+      sessionStorage.clear();
+    } catch {
+      // Ignore blocked storage.
+    }
     location.reload();
   }
 
@@ -366,8 +404,8 @@ function Definicoes() {
       <section className="panel space-y-3 p-5">
         <h2 className="font-semibold">Os teus dados</h2>
         <p className="text-xs text-muted-foreground">
-          A cópia inclui perfil, notas, flashcards, conversas e modelo escolhido. Nunca inclui a
-          chave OpenRouter. Os documentos extraídos ficam em IndexedDB e não entram na cópia.
+          A cópia inclui perfil, notas, flashcards, conversas, documentos extraídos e modelo
+          escolhido. Nunca inclui a chave OpenRouter. Pode ser grande se tiveres PDFs extensos.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={backup}>

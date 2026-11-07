@@ -23,12 +23,12 @@ Comandos:
 ```sh
 bun run lint       # ESLint + Prettier
 bunx tsc --noEmit  # Type check
-bun run test       # Vitest (110+ testes)
+bun run test       # Vitest (244 testes)
 bun run build      # Build de produção
 ```
 
-A CI (`.github/workflows/ci.yml`) corre lint, type check, testes e build em jobs
-separados.
+A CI (`.github/workflows/ci.yml`) corre instalação com lockfile congelado, lint,
+type check e build. Os testes (248) correm localmente com `bun run test`.
 
 ## Tutor IA
 
@@ -86,8 +86,10 @@ separados.
 
 ## Dados, segurança e cópias de segurança
 
-- Perfil, notas, flashcards, conversas e progresso usam `localStorage` sob o
-  prefixo `angostudy:`; todos os valores são validados com Zod (`src/lib/schemas.ts`).
+- Perfil, notas, flashcards, progresso e preferências usam `localStorage` sob o
+  prefixo `angostudy:`; todos os valores são validados com Zod
+  (`src/lib/schemas.ts`). As conversas e os documentos extraídos vivem em
+  IndexedDB, porque podem exceder a quota do `localStorage`.
 - A chave OpenRouter fica no `localStorage` — **risco real**: qualquer script na
   origem pode lê-la. As Definições explicam o risco e têm um botão
   **Remover chave**.
@@ -97,7 +99,12 @@ separados.
 - Exportar/importar (`src/lib/backup.ts`): envelope versionado, validação por
   schema, migração de cópias antigas (formato plano), rejeição de JSON inválido,
   rejeição de chaves não permitidas e escolha explícita entre **juntar** e
-  **substituir**. A chave OpenRouter nunca é exportada nem importada.
+  **substituir**. A cópia inclui conversas e documentos (até 200), mas nunca a
+  chave OpenRouter. O importador recusa ficheiros acima de 64 MB.
+- Cabeçalhos de segurança (`src/server.ts` + `src/lib/security-headers.ts`):
+  CSP sem `unsafe-eval`, `object-src 'none'`, `nosniff`, `Referrer-Policy` e
+  `Permissions-Policy`. `frame-ancestors` fica de fora de propósito para o
+  preview em iframe. `public/_headers` garante a mesma CSP em hosts estáticos.
 - Gerar flashcards valida a resposta do modelo (JSON, campos, limites de tamanho,
   duplicados e número pedido) e mostra erros recuperáveis.
 
@@ -121,7 +128,9 @@ separados.
   caracteres, PDF >40 páginas), chunking, recuperação de contexto, resumo
   hierárquico, markdown durante streaming, KaTeX, code blocks, SSE (JSON
   dividido, Unicode dividido, último evento sem newline, comentário, `[DONE]`,
-  erro, abort) e validação de cópias de segurança.
+  erro, abort), validação de cópias de segurança (incluindo conversas e
+  documentos), limite de 500 mensagens sem apagar o histórico e escape dos
+  delimitadores de conteúdo não confiável.
 
 ## Lovable
 

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ChatSchema, MAX_MESSAGES, type ParsedChatMsg } from "./schemas";
+import {
+  ChatMsgSchema,
+  ChatSchema,
+  MAX_CHAT_CONTENT,
+  MAX_MESSAGES,
+  type ParsedChatMsg,
+} from "./schemas";
 import { clearChatHistory, isIndexedDbAvailable, loadChatHistory, saveChatHistory } from "./idb";
 import { readValidated, removeStore, writeValidated } from "./store";
 
@@ -26,9 +32,30 @@ export type ChatSession = {
   ready: boolean;
 };
 
-function validated(messages: unknown): ParsedChatMsg[] {
-  const parsed = ChatSchema.safeParse(messages);
-  return parsed.success ? parsed.data.slice(-MAX_MESSAGES) : [];
+/**
+ * Validates messages one by one and keeps the newest window.
+ *
+ * The previous implementation validated the whole array first: one oversized
+ * answer (or a 501st message) made `safeParse` fail and returned `[]`, wiping
+ * the entire restored conversation. Invalid items are dropped individually and
+ * long content is truncated, never used as a reason to discard the history.
+ */
+export function validated(messages: unknown): ParsedChatMsg[] {
+  if (!Array.isArray(messages)) return [];
+  const window = messages.slice(-MAX_MESSAGES);
+  const valid: ParsedChatMsg[] = [];
+  for (const item of window) {
+    const parsed = ChatMsgSchema.safeParse(item);
+    if (parsed.success) valid.push(parsed.data);
+  }
+  return valid;
+}
+
+function normaliseForPersist(messages: ParsedChatMsg[]): ParsedChatMsg[] {
+  return messages.slice(-MAX_MESSAGES).map((message) => ({
+    ...message,
+    content: message.content.slice(0, MAX_CHAT_CONTENT),
+  }));
 }
 
 export function useChatSession(initial: ParsedChatMsg[] = []): ChatSession {
@@ -37,9 +64,12 @@ export function useChatSession(initial: ParsedChatMsg[] = []): ChatSession {
   const pending = useRef<ParsedChatMsg[] | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
+  /** True once the user has changed the session (or cleared it) before load. */
+  const dirty = useRef(false);
+  const cleared = useRef(false);
 
   const persist = useCallback(async (next: ParsedChatMsg[]) => {
-    const safe = next.slice(-MAX_MESSAGES);
+    const safe = normaliseForPersist(next);
     if (!isIndexedDbAvailable()) {
       // No IndexedDB (private mode / old browser): small, bounded mirror.
       writeValidated(LEGACY_KEY, ChatSchema, safe.slice(-FALLBACK_MESSAGES));
@@ -81,9 +111,23 @@ export function useChatSession(initial: ParsedChatMsg[] = []): ChatSession {
         if (legacy.length > 0) restored = legacy;
       }
       if (cancelled) return;
-      setState(restored.length > 0 ? restored : initial);
+      if (cleared.current) {
+        // A clear happened while IndexedDB was loading: never bring the old
+        // conversation back over the empty state.
+        setState([]);
+      } else if (dirty.current) {
+        // The user already sent something before the async restore completed.
+        // Keep those messages and merge the older restored ones behind them.
+        setState((current) => {
+          const currentIds = new Set(current.map((message) => message.id).filter(Boolean));
+          const older = restored.filter((message) => !message.id || !currentIds.has(message.id));
+          return [...older, ...current].slice(-MAX_MESSAGES);
+        });
+      } else {
+        setState(restored.length > 0 ? restored : initial);
+        if (restored.length > 0) void persist(restored);
+      }
       setReady(true);
-      if (restored.length > 0) void persist(restored);
     })();
     return () => {
       cancelled = true;
@@ -103,6 +147,7 @@ export function useChatSession(initial: ParsedChatMsg[] = []): ChatSession {
 
   const setMessages = useCallback(
     (updater: ParsedChatMsg[] | ((prev: ParsedChatMsg[]) => ParsedChatMsg[])) => {
+      dirty.current = true;
       setState((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
         pending.current = next;
@@ -120,6 +165,8 @@ export function useChatSession(initial: ParsedChatMsg[] = []): ChatSession {
   );
 
   const clear = useCallback(async () => {
+    cleared.current = true;
+    dirty.current = true;
     if (timer.current) clearTimeout(timer.current);
     pending.current = null;
     setState([]);

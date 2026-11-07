@@ -271,7 +271,13 @@ export async function extractPdfDocument(
   let pdfProducer: string | undefined;
   if (doc.getMetadata) {
     try {
-      const info = (await doc.getMetadata()).info ?? {};
+      const info =
+        (
+          await withTimeout(doc.getMetadata(), 5_000, "Ler os metadados do PDF", {
+            signal: options.signal,
+            message: "Os metadados do PDF demoraram demasiado a responder.",
+          })
+        ).info ?? {};
       if (typeof info["Title"] === "string" && info["Title"].trim())
         pdfTitle = info["Title"].trim();
       if (typeof info["Producer"] === "string" && info["Producer"].trim()) {
@@ -414,7 +420,16 @@ export async function readPdfDocument(
         const workerModule = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
         pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
         throwIfAborted(options.signal);
-        return pdfjs.getDocument({ data }).promise;
+        // Never execute JavaScript embedded in a PDF. The PDF.js typings do
+        // not expose these viewer options on `getDocument`, but passing them is
+        // harmless (unknown options are ignored) and keeps the intent explicit
+        // if the API surface changes again.
+        const init = {
+          data,
+          enableScripting: false,
+          isEvalSupported: false,
+        } as unknown as Parameters<typeof pdfjs.getDocument>[0];
+        return pdfjs.getDocument(init).promise;
       })(),
       30_000,
       "Abrir o PDF",
@@ -457,7 +472,13 @@ export async function readPdfDocument(
       options,
     );
   } finally {
-    await doc.destroy?.().catch(() => undefined);
+    // `destroy()` can hang on a malformed document. Do not let the upload stay
+    // pending forever because worker cleanup never settles.
+    if (doc.destroy) {
+      await withTimeout(doc.destroy(), 5_000, "Fechar o PDF", {
+        message: "O leitor de PDF demorou demasiado a fechar.",
+      }).catch(() => undefined);
+    }
   }
 }
 

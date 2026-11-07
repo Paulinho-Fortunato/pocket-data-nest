@@ -32,7 +32,7 @@ const DecisionSchema = z.union([
   z.object({
     type: z.literal("tool_call"),
     tool: z.enum(AGENT_TOOLS as [AgentToolName, ...AgentToolName[]]),
-    arguments: z.record(z.unknown()).default({}),
+    arguments: z.record(z.string(), z.unknown()).default({}),
   }),
   z.object({ type: z.literal("answer") }),
 ]);
